@@ -8,9 +8,9 @@
 
 | #   | Section                                     | Status |
 | --- | ------------------------------------------- | ------ |
-| 0.1 | What problem does SSO solve?                | 🔄     |
-| 0.2 | OAuth2 explained: Roles, Grants, Tokens     | ⬜     |
-| 0.3 | OpenID Connect (OIDC) on top of OAuth2      | ⬜     |
+| 0.1 | What problem does SSO solve?                | ✅     |
+| 0.2 | OAuth2 explained: Roles, Grants, Tokens     | ✅     |
+| 0.3 | OpenID Connect (OIDC) on top of OAuth2      | 🔄     |
 | 0.4 | Key flows: Authorization Code, PKCE, Client Credentials | ⬜ |
 | 0.5 | Tokens deep-dive: Access, Refresh, ID Token, JWT | ⬜  |
 

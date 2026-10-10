@@ -27,6 +27,10 @@ The goal is to learn Authentik step-by-step — from fundamentals to advanced pa
 authentik_lab/
 ├── AGENTS.md                    # This file — context for AI agents
 ├── PLAN.md                      # Learning plan & progress tracker
+├── Chapters/                    # Lesson content (one .md per chapter)
+│   ├── Chapter 0.md             # Foundations: OAuth2 / OIDC theory
+│   ├── Chapter 1.md             # Environment Setup
+│   ├── ...                      # One file per chapter, sections appended
 ├── docker/
 │   ├── docker-compose.yml       # Authentik + Traefik + Redis + PostgreSQL
 │   ├── traefik/                 # Traefik config & dynamic routing
