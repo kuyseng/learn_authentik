@@ -51,14 +51,14 @@
 
 | #   | Section                                                 | Status |
 | --- | ------------------------------------------------------- | ------ |
-| 3.1 | Create the `apps/portal` Hono app with JSX              | ⬜     |
-| 3.2 | Theory: Authorization Code Flow step-by-step            | ⬜     |
-| 3.3 | Implement login redirect → Authentik                    | ⬜     |
-| 3.4 | Implement callback: exchange code for tokens            | ⬜     |
-| 3.5 | Session management: store tokens server-side            | ⬜     |
-| 3.6 | Protected routes & middleware                           | ⬜     |
-| 3.7 | Implement logout (Authentik end-session + local)        | ⬜     |
-| 3.8 | Extract reusable auth code into `packages/auth`         | ⬜     |
+| 3.1 | Create the `apps/portal` Hono app with JSX              | ✅     |
+| 3.2 | Theory: Authorization Code Flow step-by-step            | ✅     |
+| 3.3 | Implement login redirect → Authentik                    | ✅     |
+| 3.4 | Implement callback: exchange code for tokens            | ✅     |
+| 3.5 | Session management: store tokens server-side            | ✅     |
+| 3.6 | Protected routes & middleware                           | ✅     |
+| 3.7 | Implement logout (Authentik end-session + local)        | ✅     |
+| 3.8 | Extract reusable auth code into `packages/auth`         | ✅     |
 
 **Goal**: A working SSR app with login/logout via Authentik, plus shared auth package.
 

@@ -10,3 +10,40 @@ tls:
       defaultCertificate:
         certFile: /etc/traefik/certs/local.dev.pem
         keyFile: /etc/traefik/certs/local.dev-key.pem
+
+http:
+  routers:
+    portal:
+      rule: Host(`portal.local.dev`)
+      entryPoints:
+        - websecure
+      tls: {}
+      service: portal-service
+
+    dashboard:
+      rule: Host(`dashboard.local.dev`)
+      entryPoints:
+        - websecure
+      tls: {}
+      service: dashboard-service
+
+    api:
+      rule: Host(`api.local.dev`)
+      entryPoints:
+        - websecure
+      tls: {}
+      service: api-service
+
+  services:
+    portal-service:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:3000
+    dashboard-service:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:3001
+    api-service:
+      loadBalancer:
+        servers:
+          - url: http://host.docker.internal:3002
