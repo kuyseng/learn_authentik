@@ -37,11 +37,11 @@
 
 | #   | Section                                              | Status |
 | --- | ---------------------------------------------------- | ------ |
-| 2.1 | Authentik concepts: Tenants, Flows, Stages, Policies | ⬜     |
-| 2.2 | Create your first user & group                        | ⬜     |
-| 2.3 | Create an OAuth2/OIDC Provider                        | ⬜     |
-| 2.4 | Create an Application & bind it to the Provider       | ⬜     |
-| 2.5 | Test with Authentik's built-in OIDC debug tool        | ⬜     |
+| 2.1 | Authentik concepts: Tenants, Flows, Stages, Policies | ✅     |
+| 2.2 | Create your first user & group                        | ✅     |
+| 2.3 | Create an OAuth2/OIDC Provider                        | ✅     |
+| 2.4 | Create an Application & bind it to the Provider       | ✅     |
+| 2.5 | Test with Authentik's built-in OIDC debug tool        | ✅     |
 
 **Goal**: Understand Authentik's data model and have a configured OIDC provider ready.
 
