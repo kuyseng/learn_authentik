@@ -16,7 +16,7 @@ const oidc = new OIDCClient({
   clientId: "portal-client",
   clientSecret: "portal-secret-123456",
   redirectUri: "https://portal.local.dev/auth/callback",
-  scopes: ["openid", "profile", "email", "offline_access"],
+  scopes: ["openid", "profile", "email"],
 });
 
 const sessionManager = new SessionManager();
