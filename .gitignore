@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+bun.lockb
+bun.lock
+
+# Environment & secrets
+.env
+*.env
+!.env.example
+*.pem
+*.key
+
+# OS & Logs
+.DS_Store
+*.log
+
+# Build output
+dist/
+build/
+.cache/

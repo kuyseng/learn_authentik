@@ -12,7 +12,7 @@
 | 0.2 | OAuth2 explained: Roles, Grants, Tokens     | ✅     |
 | 0.3 | OpenID Connect (OIDC) on top of OAuth2      | ✅     |
 | 0.4 | Key flows: Authorization Code, PKCE, Client Credentials | ✅ |
-| 0.5 | Tokens deep-dive: Access, Refresh, ID Token, JWT | 🔄  |
+| 0.5 | Tokens deep-dive: Access, Refresh, ID Token, JWT | ✅     |
 
 **Goal**: Understand the theory so every later step makes sense.
 
@@ -22,12 +22,12 @@
 
 | #   | Section                                          | Status |
 | --- | ------------------------------------------------ | ------ |
-| 1.1 | Initialize Bun workspace (monorepo)              | ⬜     |
-| 1.2 | Set up local domains (`*.local.dev`) & /etc/hosts | ⬜     |
-| 1.3 | Generate self-signed wildcard TLS cert            | ⬜     |
-| 1.4 | Docker Compose: Authentik + PostgreSQL + Redis    | ⬜     |
-| 1.5 | Docker Compose: Traefik with TLS                  | ⬜     |
-| 1.6 | Boot everything & verify Authentik admin UI       | ⬜     |
+| 1.1 | Initialize Bun workspace (monorepo)              | ✅     |
+| 1.2 | Set up local domains (`*.local.dev`) & /etc/hosts | ✅     |
+| 1.3 | Generate self-signed wildcard TLS cert            | ✅     |
+| 1.4 | Docker Compose: Authentik + PostgreSQL + Redis    | ✅     |
+| 1.5 | Docker Compose: Traefik with TLS                  | ✅     |
+| 1.6 | Boot everything & verify Authentik admin UI       | ✅     |
 
 **Goal**: A running Authentik instance at `https://auth.local.dev` with Traefik in front.
 

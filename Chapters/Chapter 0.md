@@ -766,3 +766,346 @@ That's it. **No redirects, no browser, no login page.**
 ---
 
 > **Key takeaway**: There are three flows we'll use. **Authorization Code** for server-side apps (secure backend keeps the secret). **Authorization Code + PKCE** for SPAs (a one-time proof replaces the secret). **Client Credentials** for machine-to-machine (no user, just service identity). The flow you pick depends on whether there's a user and whether the app can keep a secret.
+
+
+---
+
+## 0.5 — Tokens Deep-Dive: Access, Refresh, ID Token, JWT
+
+In sections 0.2 through 0.4, we saw tokens flying back and forth between Authentik, the browser, and backend servers. Now let's open the hood and inspect what these tokens actually look like, how they work cryptographically, and why there are three different kinds.
+
+---
+
+### The Three Tokens: Who, What, and How Long
+
+It is easy for beginners to confuse **ID Tokens** and **Access Tokens**. They are both typically JSON Web Tokens (JWTs), but their **purpose, audience, and handling** are completely different:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                               AUTHENTIK                                     │
+│                        (Authorization Server)                               │
+└────────┬──────────────────────────┬─────────────────────────────┬───────────┘
+         │                          │                             │
+         │ Issues                   │ Issues                      │ Issues
+         ▼                          ▼                             ▼
+┌──────────────────┐       ┌──────────────────┐          ┌──────────────────┐
+│     ID Token     │       │   Access Token   │          │  Refresh Token   │
+│                  │       │                  │          │                  │
+│ "Who the user    │       │ "What the client │          │ "Get new tokens  │
+│  is"             │       │  is allowed to   │          │  without logging │
+│                  │       │  do"             │          │  in again"       │
+└────────┬─────────┘       └────────┬─────────┘          └────────┬─────────┘
+         │                          │                             │
+         ▼                          ▼                             ▼
+  Audience: YOUR APP         Audience: API SERVER           Audience: AUTHENTIK
+  (Client application)       (Resource server)              (Auth server only)
+```
+
+| Property | ID Token | Access Token | Refresh Token |
+|---|---|---|---|
+| **Primary Purpose** | **Authentication** (Identity) | **Authorization** (Access permissions) | **Renewal** (Session extension) |
+| **Intended Audience (`aud`)** | **Your client application** (e.g., `apps/portal`) | **Resource Server / API** (e.g., `apps/api`) | **Authentik** only |
+| **Should the API accept it?** | ❌ **No!** An API should never accept an ID token for authorization | ✅ **Yes!** Sent in `Authorization: Bearer <token>` header | ❌ **No!** Never sent to resource APIs |
+| **Format** | Always a **JWT** | Usually a **JWT** (or opaque string) | Opaque string or signed token |
+| **Typical Lifespan** | Short to medium (e.g., 5 min to 1 hour) | **Short** (e.g., 5 to 15 minutes) | **Long** (e.g., 7 days to 30 days) |
+| **Where it goes** | Inspected by your app to identify the user | Passed to APIs to perform actions on user's behalf | Kept securely; sent to Authentik `/token` to renew |
+
+> [!IMPORTANT]
+> **Golden Rule**: 
+> - **ID Token is for your frontend/SSR app** to know who logged in (name, email, avatar).
+> - **Access Token is for the backend API** to decide whether to let the request through.
+> - Never send an ID Token to your API as a bearer token.
+
+---
+
+### What is a JWT (JSON Web Token)?
+
+Both ID Tokens and Authentik's Access Tokens are **JWTs** (pronounced *"jot"* — RFC 7519).
+
+A JWT is a compact, URL-safe string made of three parts separated by dots (`.`):
+
+```
+eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEyMzQ1In0.eyJpc3MiOiJodHRwczovL2F1dGgubG9jYWwuZGV2L2FwcGxpY2F0aW9uL28vcG9ydGFsLyIsInN1YiI6ImFlYzEwZjM4LTQxMjQtNGI4NS1hOWUxLThlNDY5YTFiMzQzYyIsImF1ZCI6InBvcnRhbC1jbGllbnQiLCJleHAiOjE3NjAxNDQ0MDAsImlhdCI6MTc2MDE0MDgwMCwiZW1haWwiOiJiZW5AZXhhbXBsZS5jb20iLCJuYW1lIjoiQmVuIFdpbGxpYW1zIiwiZ3JvdXBzIjpbImFkbWlucyIsImVuZ2luZWVyaW5nIl19.dBjftJeZ4CVP-mB92K...[cryptographic signature]
+```
+
+```
+┌─────────────────────────┐ . ┌─────────────────────────┐ . ┌─────────────────────────┐
+│         HEADER          │   │         PAYLOAD         │   │        SIGNATURE        │
+│                         │   │                         │   │                         │
+│  Algorithm & token type │   │  Claims (user & token   │   │  Cryptographic proof    │
+│  e.g. RS256, JWT, Key ID│   │  metadata, roles)       │   │  that data is untampered│
+└─────────────────────────┘   └─────────────────────────┘   └─────────────────────────┘
+```
+
+Let's dissect each part:
+
+---
+
+#### 1. Header (Metadata)
+
+The header tells the receiver how the token was signed:
+
+```json
+{
+  "alg": "RS256",
+  "typ": "JWT",
+  "kid": "authentik-key-portal-2024"
+}
+```
+
+- **`alg`**: The cryptographic algorithm used to sign the token (`RS256` = RSA Signature with SHA-256).
+- **`typ`**: Type of token, almost always `JWT`.
+- **`kid`** *(Key ID)*: Identifies which public key from Authentik's key registry (JWKS) should be used to verify the signature. Crucial when keys are rotated!
+
+---
+
+#### 2. Payload (Claims)
+
+The payload contains the **claims** — statements about an entity (typically the user) and additional metadata.
+
+```json
+{
+  "iss": "https://auth.local.dev/application/o/portal/",
+  "sub": "aec10f38-4124-4b85-a9e1-8e469a1b343c",
+  "aud": "portal-client",
+  "exp": 1760144400,
+  "iat": 1760140800,
+  "auth_time": 1760140795,
+  "jti": "8f9024f2-95f0-4a87-b089-c44bb6a30922",
+  
+  "name": "Ben Williams",
+  "preferred_username": "ben3k",
+  "email": "ben@example.com",
+  "email_verified": true,
+  "groups": [
+    "admins",
+    "developers"
+  ]
+}
+```
+
+Claims are split into two categories:
+
+##### A. Standard OIDC / JWT Claims (Registered Claims)
+
+| Claim | Full Name | Description |
+|---|---|---|
+| **`iss`** | Issuer | URL of the Authentik provider that created this token. Must match what your app expects! |
+| **`sub`** | Subject | Unique, immutable identifier for the user (in Authentik: UUID). |
+| **`aud`** | Audience | Who this token is intended for (usually your Client ID for ID tokens, or API identifier for access tokens). |
+| **`exp`** | Expiration Time | Unix timestamp when the token expires. After this timestamp, the token **must be rejected**. |
+| **`iat`** | Issued At | Unix timestamp when the token was created. |
+| **`nbf`** | Not Before | Unix timestamp before which the token cannot be accepted. |
+| **`jti`** | JWT ID | Unique identifier for the token itself (used to prevent replay attacks). |
+
+##### B. User Profile & Custom Claims (Identity / RBAC)
+
+Authentik populates these based on the scopes requested (`openid profile email groups`):
+
+- **`name`** / **`preferred_username`**: User's display name or username.
+- **`email`** / **`email_verified`**: User's verified email.
+- **`groups`**: List of Authentik groups the user belongs to (e.g. `["admins", "developers"]`). **This is how we implement Role-Based Access Control (RBAC) in Chapter 6!**
+
+---
+
+#### 3. Signature (Cryptographic Integrity)
+
+The signature is computed by taking the Base64URL-encoded header and payload, hashing them, and encrypting that hash with the private key:
+
+```text
+RSASHA256(
+  base64UrlEncode(header) + "." + base64UrlEncode(payload),
+  authentik_private_key
+)
+```
+
+Only **Authentik holds the private key**. Anyone with Authentik's **public key** can verify that:
+1. The header and payload were not altered by anyone in transit.
+2. The token was genuinely created by Authentik.
+
+> [!WARNING]
+> **Base64URL is NOT Encryption!**
+> A common misconception: *"JWTs are encrypted."*
+> Standard JWTs are **signed, not encrypted**. The header and payload are merely Base64URL-encoded.
+> Anyone who intercepts a JWT can paste it into [jwt.io](https://jwt.io) and read every single claim in plaintext.
+> **Never store sensitive data (passwords, credit card numbers, database connection strings) in JWT claims.**
+
+---
+
+### How Verification Works (Offline & Fast!)
+
+One of the greatest benefits of asymmetric JWTs (RS256) is **stateless verification**.
+
+When your backend API receives an HTTP request with an Access Token, **it does NOT have to call Authentik to verify it!**
+
+```
+┌──────────────┐                                ┌──────────────┐
+│  Authentik   │                                │  apps/api    │
+│  (Auth Server│                                │ (Your API)   │
+└──────┬───────┘                                └──────┬───────┘
+       │                                               │
+       │ 1. Startup: App fetches public keys           │
+       │    GET /.well-known/jwks.json                 │
+       │◀──────────────────────────────────────────────│
+       │                                               │
+       │ 2. Authentik returns public key set (JWKS)    │
+       │    { "keys": [ { "kid": "...", "n": "...", "e": "AQAB" } ] }
+       │──────────────────────────────────────────────▶│
+       │                                               │ (Caches keys in memory)
+       │                                               │
+  User Browser                                         │
+       │ 3. API Request:                               │
+       │    GET /api/documents                         │
+       │    Authorization: Bearer <JWT>                │
+       │──────────────────────────────────────────────▶│
+       │                                               │ 4. Verify locally:
+       │                                               │    • Match kid in header
+       │                                               │    • Verify signature with public key
+       │                                               │    • Check exp > now
+       │                                               │    • Check iss == https://auth.local.dev/...
+       │                                               │    • Check aud == my-api
+       │                                               │
+       │                                               │ 5. Valid! Process request locally
+       │◀──────────────────────────────────────────────│    (ZERO HTTP calls to Authentik!)
+```
+
+#### What is JWKS (`.well-known/jwks.json`)?
+
+JWKS stands for **JSON Web Key Set**. It is a public endpoint hosted by Authentik that exposes its public keys in JSON format.
+
+A JWKS document looks like this:
+
+```json
+{
+  "keys": [
+    {
+      "kty": "RSA",
+      "use": "sig",
+      "alg": "RS256",
+      "kid": "authentik-key-portal-2024",
+      "n": "u1w2x3y4z...[modulus]",
+      "e": "AQAB"
+    }
+  ]
+}
+```
+
+Libraries like `jose` or `jsonwebtoken` take this public key and mathematically verify the signature in less than **1 millisecond**.
+
+#### The 4 Checks Every Service Must Perform:
+
+Before trusting any token, an application or API must verify:
+1. **Signature**: Does the signature match the payload when checked against Authentik's public key?
+2. **Expiration (`exp`)**: Is `exp > current_timestamp`? (Allowing 10-30 seconds clock skew tolerance).
+3. **Issuer (`iss`)**: Does `iss` exactly match your Authentik provider URL?
+4. **Audience (`aud`)**: Does `aud` match the expected Client ID or Resource Server audience?
+
+---
+
+### The Refresh Token Lifecycle
+
+Because Access Tokens are passed around in HTTP headers and verify offline, revoking them immediately is difficult. The standard security compromise is:
+- **Short-lived Access Tokens**: Valid for only 5–15 minutes. If stolen, the attacker's window is tiny.
+- **Long-lived Refresh Tokens**: Valid for 7–30 days. Kept securely on the server or in secure storage, used strictly to request a new Access Token when the old one expires.
+
+#### The Refresh Cycle:
+
+```
+  Client App                             API Server                     Authentik
+      │                                       │                             │
+      │ 1. GET /api/data                      │                             │
+      │    Authorization: Bearer <Expired JWT>│                             │
+      │──────────────────────────────────────▶│                             │
+      │                                       │                             │
+      │ 2. 401 Unauthorized (Token expired)   │                             │
+      │◀──────────────────────────────────────│                             │
+      │                                                                     │
+      │ 3. POST /token                                                      │
+      │    grant_type=refresh_token                                         │
+      │    refresh_token=<LongLivedRefreshToken>                            │
+      │    client_id=portal-client                                          │
+      │────────────────────────────────────────────────────────────────────▶│
+      │                                                                     │
+      │ 4. Authentik checks: Is user still active? Has session been revoked?│
+      │    Returns new Access Token (and optionally new Refresh Token)      │
+      │◀────────────────────────────────────────────────────────────────────│
+      │                                       │                             │
+      │ 5. Retry: GET /api/data               │                             │
+      │    Authorization: Bearer <New JWT>    │                             │
+      │──────────────────────────────────────▶│                             │
+      │                                       │                             │
+      │ 6. 200 OK (Data returned)             │                             │
+      │◀──────────────────────────────────────│                             │
+```
+
+#### Refresh Token Rotation
+
+Modern security standards (RFC 6749 & RFC 6819) recommend **Refresh Token Rotation**:
+- Every time Authentik issues a new Access Token using a Refresh Token, it **invalidates the used Refresh Token** and issues a brand-new Refresh Token alongside the Access Token.
+- If an attacker intercepts a Refresh Token and tries to use it after the legitimate client already rotated it, Authentik detects the reuse and immediately **revokes the entire session and all child tokens**.
+
+---
+
+### Where Should Tokens Be Stored?
+
+A critical security decision in any OAuth2/OIDC implementation is token storage:
+
+| Storage Location | Vulnerable to XSS? | Vulnerable to CSRF? | Best For |
+|---|---|---|---|
+| **HttpOnly, Secure, SameSite Cookie** | 🛡️ **Protected** (JavaScript cannot read it) | ⚠️ Vulnerable if SameSite not configured properly | **SSR Apps (`apps/portal`)** — Store session/tokens in an encrypted cookie |
+| **In-Memory JavaScript Variable** | ⚠️ Vulnerable if attacker runs code while app is open, but lost on reload | 🛡️ **Protected** (No ambient credentials) | **SPAs (`apps/dashboard`)** — Keep access token in memory, refresh via backend proxy |
+| **Browser `localStorage` / `sessionStorage`** | ❌ **High Risk** (Any XSS payload can dump `localStorage` and exfiltrate tokens) | 🛡️ **Protected** | 🚫 **Not recommended for high-value tokens** |
+
+In our architecture:
+- In **Chapter 3 (`apps/portal`)**: We will store tokens in an **encrypted, HttpOnly cookie** managed by Hono sessions. The browser never touches raw tokens.
+- In **Chapter 4 (`apps/dashboard`)**: We will explore modern SPA token handling (in-memory tokens with PKCE).
+- In **Chapter 7 (`apps/api`)**: Service tokens will reside in secure environment variables.
+
+---
+
+### Quick Self-Check: Test Your Understanding
+
+Before we jump into Chapter 1 to build the infrastructure, see if you can answer these:
+
+1. **Why does an API reject an ID Token even if the signature is valid?**
+   <details>
+   <summary>Reveal Answer</summary>
+   Because the ID Token's audience (<code>aud</code>) is the client app (e.g. portal), not the API. An ID Token proves <em>who the user is</em> to the client; it does not grant authorization to access API resources.
+   </details>
+
+2. **Why don't backend APIs have to make an HTTP request to Authentik for every incoming API call?**
+   <details>
+   <summary>Reveal Answer</summary>
+   Because tokens are signed asymmetrically (RS256). The API downloads Authentik's public keys once from <code>/.well-known/jwks.json</code> and verifies signatures mathematically in memory without network overhead.
+   </details>
+
+3. **If a JWT is intercepted over an insecure network, can an attacker read the user's email inside it?**
+   <details>
+   <summary>Reveal Answer</summary>
+   Yes! JWTs are signed, not encrypted. The payload is standard Base64URL encoding which anyone can decode instantly. That is why HTTPS/TLS is mandatory for OAuth2/OIDC.
+   </details>
+
+---
+
+> **Key takeaway**: 
+> - **ID Token**: Tells the app *who* logged in.
+> - **Access Token**: Tells APIs *what* the client can access.
+> - **Refresh Token**: Gets new tokens when Access Tokens expire.
+> - **JWTs**: Self-contained packages (`header.payload.signature`) verified statelessly using public keys from Authentik's JWKS endpoint.
+
+---
+
+### 🎉 Chapter 0 Complete!
+
+You now possess the foundational theory of:
+- **SSO & Federated Identity** (0.1)
+- **OAuth2 Roles, Grants, & Scopes** (0.2)
+- **OpenID Connect & Discovery** (0.3)
+- **Authorization Code, PKCE, & Client Credentials Flows** (0.4)
+- **Tokens Deep-Dive & JWT Cryptography** (0.5)
+
+Every piece of configuration we do in Authentik and every line of code we write in Bun/Hono in subsequent chapters directly ties back to these concepts.
+
+---
+
+> **Ready to build?** Type `c` to proceed to **Chapter 1: Environment Setup** (Docker Compose, Bun monorepo, local TLS certificates, and Traefik)!
