@@ -198,21 +198,71 @@ app.get("/admin", requireGroup("lab-admins"), (c) => {
 
 ## 3.7 — Implement Logout (Authentik End-Session + Local)
 
-Single Sign-On requires **Single Sign-Out**. If an application only clears its local cookie, the user is still logged into Authentik in the browser!
+Single Sign-On requires **Single Sign-Out (SLO)**. If an application only clears its local cookie, the user remains authenticated at the Identity Provider (Authentik) in the browser!
 
-Our logout handler performs a two-step termination:
-1. Deletes the local signed cookie `ak_lab_session`.
-2. Redirects the browser to Authentik's end-session endpoint with `post_logout_redirect_uri`:
+### The Two Logout Strategies
+
+When designing logout in an SSO architecture, you typically choose between two patterns:
+
+1. **Application-Only Logout**: Destroys the local app session cookie and immediately redirects the user back to the application. The user stays logged into Authentik and any other connected apps.
+2. **Central Single Sign-Out (SLO)**: Destroys the local app session cookie AND redirects to Authentik's `end_session_endpoint` to terminate the central session across all apps.
+
+In `apps/portal`, our logout handler implements **Central Single Sign-Out**:
 
 ```typescript
 app.get("/auth/logout", (c) => {
+  // 1. Delete the local signed cookie
   sessionManager.deleteSession(c);
+
+  // 2. Redirect the browser to Authentik's end-session endpoint
   const logoutUrl = oidc.getEndSessionUrl("https://portal.local.dev/");
   return c.redirect(logoutUrl);
 });
 ```
 
-Authentik destroys the session in Redis/PostgreSQL and redirects the user back to `https://portal.local.dev/`.
+### Deep-Dive: How Authentik's End-Session Flow Works
+
+Under the hood, Authentik's OIDC implementation handles logout through an **Invalidation Flow**:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Browser / User
+    participant Portal as Developer Portal (apps/portal)
+    participant EndSession as Authentik EndSessionView
+    participant Invalidation as default-invalidation-flow
+    participant Login as default-authentication-flow
+
+    User->>Portal: Click "Logout" (/auth/logout)
+    Portal->>Portal: Delete local cookie (ak_lab_session)
+    Portal->>EndSession: 302 Redirect to /application/o/portal/end-session/
+    Note over EndSession: Authentik dynamically injects SessionEndStage
+    EndSession-->>User: Renders "You've logged out of Developer Portal..."
+    User->>Invalidation: Click "Log out of authentik" (/if/flow/default-invalidation-flow/)
+    Note over Invalidation: UserLogoutStage runs -> destroys Redis/PostgreSQL session
+    Invalidation->>Invalidation: Flow complete -> redirects to "/"
+    Note over User: Unauthenticated user accesses "/"
+    Invalidation-->>Login: 302 Redirect to /if/flow/default-authentication-flow/?next=%2F
+    Login-->>User: Renders Authentik Sign In Screen
+```
+
+#### Step 1: The `SessionEndStage` Challenge
+When the browser hits `/application/o/portal/end-session/`, Authentik's `EndSessionView` dynamically inserts an in-memory `SessionEndStage`. Rather than blindly redirecting, Authentik presents the user with three intentional choices:
+
+| Button | Action | Destination |
+|---|---|---|
+| **Log back into Developer Portal** | Returns the user directly back to the app | `https://portal.local.dev/` |
+| **Go back to overview** | Navigates to Authentik's User Dashboard / App Library | `https://auth.local.dev/` |
+| **Log out of authentik** | Triggers central invalidation flow to terminate SSO session | `https://auth.local.dev/if/flow/default-invalidation-flow/` |
+
+#### Step 2: What Happens on "Log out of authentik"?
+When the user clicks **Log out of authentik** (`https://auth.local.dev/if/flow/default-invalidation-flow/`):
+1. Authentik runs `UserLogoutStage`, destroying the user's session in PostgreSQL and Redis.
+2. The flow executor finishes and issues a redirect to the root URL: `{"component": "xak-flow-redirect", "to": "/"}`.
+3. Because the user is now completely unauthenticated, navigating to `https://auth.local.dev/` causes Authentik to 302 redirect to the login screen: `/if/flow/default-authentication-flow/?next=%2F`.
+
+> [!NOTE]
+> Seeing Authentik's **Sign in to your account** page after clicking "Log out of authentik" is confirmation that your SSO session was successfully invalidated! Because your credentials are no longer active, Authentik prompts you to sign in again if you visit its root domain.
 
 ---
 
