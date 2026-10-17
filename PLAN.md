@@ -68,14 +68,14 @@
 
 | #   | Section                                                    | Status |
 | --- | ---------------------------------------------------------- | ------ |
-| 4.1 | Create the `apps/dashboard` — React SPA + Hono API        | ⬜     |
-| 4.2 | Theory: Why PKCE? How it differs from Authorization Code   | ⬜     |
-| 4.3 | Configure a new Authentik Provider (public client, PKCE)   | ⬜     |
-| 4.4 | Implement PKCE login flow in the React SPA                 | ⬜     |
-| 4.5 | Token storage in browser (memory vs localStorage debate)   | ⬜     |
-| 4.6 | Call the Hono API with Bearer token                        | ⬜     |
-| 4.7 | JWT validation in the Hono API middleware                  | ⬜     |
-| 4.8 | Silent token refresh                                       | ⬜     |
+| 4.1 | Create the `apps/dashboard` — React SPA + Hono API        | ✅     |
+| 4.2 | Theory: Why PKCE? How it differs from Authorization Code   | ✅     |
+| 4.3 | Configure a new Authentik Provider (public client, PKCE)   | ✅     |
+| 4.4 | Implement PKCE login flow in the React SPA                 | ✅     |
+| 4.5 | Token storage in browser (memory vs localStorage debate)   | ✅     |
+| 4.6 | Call the Hono API with Bearer token                        | ✅     |
+| 4.7 | JWT validation in the Hono API middleware                  | ✅     |
+| 4.8 | Silent token refresh                                       | ✅     |
 
 **Goal**: A working SPA with PKCE auth, calling a protected Hono API.
 
