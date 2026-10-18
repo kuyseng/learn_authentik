@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { generateRandomString, generateCodeChallenge } from "./pkce";
+import { ReactNavbar } from "@authentik-lab/ui/react";
 
 // OIDC Configuration for the SPA
 const AUTH_CONFIG = {
@@ -176,39 +177,14 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Header */}
-      <header className="border-b border-slate-800 bg-slate-900/60 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
-              D
-            </div>
-            <div>
-              <span className="font-semibold text-white tracking-tight">React Dashboard</span>
-              <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                PKCE Flow
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <a
-              href="https://portal.local.dev/"
-              className="text-xs text-slate-400 hover:text-white transition"
-            >
-              ← Portal App
-            </a>
-            {user ? (
-              <button
-                onClick={handleLogout}
-                className="text-xs px-3 py-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 transition"
-              >
-                Sign Out
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </header>
+      {/* Unified Monorepo Navigation Bar */}
+      <ReactNavbar
+        currentApp="dashboard"
+        user={user}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
+        loading={loading}
+      />
 
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-6 py-10 flex-1 w-full space-y-8">

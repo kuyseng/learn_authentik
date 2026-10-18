@@ -85,10 +85,10 @@
 
 | #   | Section                                                    | Status |
 | --- | ---------------------------------------------------------- | ------ |
-| 5.1 | Theory: How SSO works (Authentik session cookie)           | ⬜     |
-| 5.2 | Log in to Portal → visit Dashboard → already logged in    | ⬜     |
-| 5.3 | Single Logout (SLO) across apps                           | ⬜     |
-| 5.4 | Build a shared navigation bar (`packages/ui`)              | ⬜     |
+| 5.1 | Theory: How SSO works (Authentik session cookie)           | ✅     |
+| 5.2 | Log in to Portal → visit Dashboard → already logged in    | ✅     |
+| 5.3 | Single Logout (SLO) across apps                           | ✅     |
+| 5.4 | Build a shared navigation bar (`packages/ui`)              | ✅     |
 
 **Goal**: Seamless SSO experience across your Bun apps.
 
@@ -171,12 +171,12 @@
 
 | Chapter | Topic                          | Status |
 | ------- | ------------------------------ | ------ |
-| 0       | OAuth2 / OIDC Foundations      | ⬜     |
-| 1       | Environment Setup              | ⬜     |
-| 2       | Authentik Admin Basics         | ⬜     |
-| 3       | SSR App: Auth Code Flow        | ⬜     |
-| 4       | SPA App: PKCE Flow             | ⬜     |
-| 5       | SSO Across Apps                | ⬜     |
+| 0       | OAuth2 / OIDC Foundations      | ✅     |
+| 1       | Environment Setup              | ✅     |
+| 2       | Authentik Admin Basics         | ✅     |
+| 3       | SSR App: Auth Code Flow        | ✅     |
+| 4       | SPA App: PKCE Flow             | ✅     |
+| 5       | SSO Across Apps                | ✅     |
 | 6       | RBAC: Roles & Permissions      | ⬜     |
 | 7       | API-to-API: Client Credentials | ⬜     |
 | 8       | Forward Auth with Traefik      | ⬜     |

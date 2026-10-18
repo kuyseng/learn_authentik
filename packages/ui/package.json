@@ -1,0 +1,27 @@
+{
+  "name": "@authentik-lab/ui",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./hono": "./src/hono.tsx",
+    "./react": "./src/react.tsx"
+  },
+  "dependencies": {
+    "hono": "^4.13.13"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  }
+}
