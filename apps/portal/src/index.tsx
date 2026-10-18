@@ -5,6 +5,8 @@ import {
   createAuthMiddleware,
   requireAuth,
   requireGroup,
+  requireRole,
+  requireAnyRole,
 } from "@authentik-lab/auth";
 import { Layout } from "./layout";
 
@@ -16,7 +18,7 @@ const oidc = new OIDCClient({
   clientId: "portal-client",
   clientSecret: "portal-secret-123456",
   redirectUri: "https://portal.local.dev/auth/callback",
-  scopes: ["openid", "profile", "email"],
+  scopes: ["openid", "profile", "email", "roles"],
 });
 
 const sessionManager = new SessionManager();
@@ -289,9 +291,47 @@ app.get("/profile", requireAuth(), (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// Route: Admin Console (RBAC Protected: requires 'lab-admins')
+// Route: Developer Console (RBAC: requires role 'developer' or 'admin')
 // ---------------------------------------------------------------------------
-app.get("/admin", requireGroup("lab-admins"), (c) => {
+app.get("/developer", requireAnyRole(["developer", "admin"]), (c) => {
+  const user = c.get("user")!;
+
+  return c.html(
+    <Layout user={user} title="Developer Console — Developer Portal">
+      <div class="space-y-6">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 flex items-center justify-center text-xl font-bold">
+            💻
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold text-white">Developer Console</h1>
+            <p class="text-slate-400 text-sm mt-0.5">
+              Guarded by <code class="text-indigo-400">requireAnyRole(["developer", "admin"])</code> middleware
+            </p>
+          </div>
+        </div>
+
+        <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6 text-emerald-300 text-sm">
+          ✅ <strong>Access Granted!</strong> You are authenticated as <strong class="text-white">{user.preferred_username}</strong>.
+          Your mapped roles include: <code class="bg-emerald-950 px-2 py-0.5 rounded text-emerald-200">{JSON.stringify(user.roles || [])}</code>.
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-3">
+          <h3 class="text-base font-semibold text-white">Developer Tools & Diagnostics</h3>
+          <p class="text-slate-400 text-xs leading-relaxed">
+            Both <strong class="text-white">ben3k</strong> (Admin) and <strong class="text-white">alice</strong> (Developer) can access this page.
+            Regular users like <strong class="text-white">bob</strong> are intercepted with 403 Forbidden!
+          </p>
+        </div>
+      </div>
+    </Layout>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Route: Admin Console (RBAC: requires role 'admin')
+// ---------------------------------------------------------------------------
+app.get("/admin", requireRole("admin"), (c) => {
   const user = c.get("user")!;
 
   return c.html(
@@ -304,19 +344,19 @@ app.get("/admin", requireGroup("lab-admins"), (c) => {
           <div>
             <h1 class="text-2xl font-bold text-white">Admin Management Console</h1>
             <p class="text-slate-400 text-sm mt-0.5">
-              Guarded by <code class="text-indigo-400">requireGroup("lab-admins")</code> middleware
+              Guarded by <code class="text-indigo-400">requireRole("admin")</code> middleware
             </p>
           </div>
         </div>
 
         <div class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6 text-emerald-300 text-sm">
-          ✅ <strong>Access Granted!</strong> You are authenticated as <strong class="text-white">{user.preferred_username}</strong>, and Authentik confirms you belong to the <code class="bg-emerald-950 px-2 py-0.5 rounded text-emerald-200">lab-admins</code> group.
+          ✅ <strong>Access Granted!</strong> You are authenticated as <strong class="text-white">{user.preferred_username}</strong>, and Authentik confirms you have the <code class="bg-emerald-950 px-2 py-0.5 rounded text-emerald-200">admin</code> role.
         </div>
 
         <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
           <h3 class="text-base font-semibold text-white">Simulated Admin Controls</h3>
           <p class="text-slate-400 text-xs leading-relaxed">
-            Try logging out and logging in as <code class="text-indigo-300">alice</code> (who only belongs to <code class="text-indigo-300">lab-developers</code>).
+            Try logging out and logging in as <code class="text-indigo-300">alice</code> (who is a <code class="text-indigo-300">developer</code>, but NOT an <code class="text-indigo-300">admin</code>).
             When Alice visits this page, the middleware will intercept her request and render a custom 403 Forbidden page!
           </p>
 

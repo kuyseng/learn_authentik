@@ -34,8 +34,22 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
           <div class="max-w-6xl mx-auto px-6 h-11 flex items-center gap-4 text-xs font-medium text-slate-400">
             <span class="text-slate-500 uppercase font-bold tracking-wider text-[10px]">Portal Pages:</span>
             <a href="/" class="hover:text-white transition">Home</a>
-            <a href="/profile" class="hover:text-white transition">Profile (Protected)</a>
-            <a href="/admin" class="hover:text-white transition">Admin Only</a>
+            <a href="/profile" class="hover:text-white transition">Profile</a>
+            <a href="/developer" class="hover:text-white transition flex items-center gap-1.5">
+              <span>Dev Console</span>
+              <span class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono">Dev</span>
+            </a>
+            {user?.roles?.includes("admin") || user?.groups?.includes("lab-admins") ? (
+              <a href="/admin" class="text-amber-400 hover:text-amber-300 font-semibold transition flex items-center gap-1.5">
+                <span>Admin Console</span>
+                <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">Admin</span>
+              </a>
+            ) : (
+              <a href="/admin" class="text-slate-500 hover:text-slate-400 transition flex items-center gap-1">
+                <span>Admin (Protected)</span>
+                <span class="text-[10px]">🔒</span>
+              </a>
+            )}
           </div>
         </div>
 

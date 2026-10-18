@@ -24,6 +24,9 @@ export interface UserClaims {
   email?: string;
   email_verified?: boolean;
   groups?: string[];
+  roles?: string[];
+  permissions?: string[];
+  is_admin?: boolean;
   iss?: string;
   aud?: string | string[];
   exp?: number;

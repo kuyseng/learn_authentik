@@ -6,6 +6,7 @@ declare module "hono" {
   interface ContextVariableMap {
     session: AuthSession | null;
     user: UserClaims | null;
+    jwtUser?: any;
   }
 }
 
@@ -22,12 +23,22 @@ export function createAuthMiddleware(sessionManager: SessionManager): Middleware
 }
 
 /**
+ * Helper to get user claims from either SSR session or JWT context.
+ */
+export function getEffectiveUser(c: Context): UserClaims | null {
+  return c.get("user") || c.get("jwtUser") || null;
+}
+
+/**
  * Route guard that redirects unauthenticated users to the login route.
  */
 export function requireAuth(loginPath: string = "/auth/login"): MiddlewareHandler {
   return async (c: Context, next) => {
-    const user = c.get("user");
+    const user = getEffectiveUser(c);
     if (!user) {
+      if (c.req.path.startsWith("/api/")) {
+        return c.json({ error: "Unauthorized", message: "Authentication required" }, 401);
+      }
       return c.redirect(loginPath);
     }
     await next();
@@ -35,43 +46,181 @@ export function requireAuth(loginPath: string = "/auth/login"): MiddlewareHandle
 }
 
 /**
+ * Helper to render a clean 403 Forbidden HTML error page.
+ */
+function renderForbiddenHtml(c: Context, user: UserClaims, requirement: string, currentAssigned: string[]) {
+  return c.html(
+    `<!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <title>403 Forbidden - Access Denied</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+      </head>
+      <body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-slate-900 border border-rose-500/30 rounded-2xl p-8 shadow-2xl text-center">
+          <div class="w-16 h-16 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
+            ⛔
+          </div>
+          <h1 class="text-2xl font-bold text-white mb-2">403 Forbidden</h1>
+          <p class="text-slate-400 text-sm mb-6 leading-relaxed">
+            Your account <strong class="text-white">${user.preferred_username || user.name || "User"}</strong> lacks the required permission:
+            <span class="block mt-2 bg-rose-500/20 text-rose-300 px-3 py-1 rounded-lg font-mono text-xs font-semibold border border-rose-500/30">
+              Required: ${requirement}
+            </span>
+          </p>
+          <div class="bg-slate-950 p-4 rounded-xl text-left text-xs text-slate-400 mb-6 font-mono border border-slate-800 space-y-1">
+            <div class="text-slate-500 font-bold uppercase tracking-wider text-[10px]">Your Assigned Claims:</div>
+            <div class="text-indigo-400 break-words">${JSON.stringify(currentAssigned)}</div>
+          </div>
+          <div class="flex items-center justify-center gap-3">
+            <a href="/" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium px-4 py-2 rounded-lg text-xs transition border border-slate-700">
+              Return Home
+            </a>
+            <a href="/auth/logout" class="bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-medium px-4 py-2 rounded-lg text-xs transition border border-rose-500/30">
+              Switch Account
+            </a>
+          </div>
+        </div>
+      </body>
+    </html>`,
+    403
+  );
+}
+
+/**
  * Route guard that requires membership in a specific Authentik group.
  */
 export function requireGroup(groupName: string): MiddlewareHandler {
   return async (c: Context, next) => {
-    const user = c.get("user");
+    const user = getEffectiveUser(c);
     if (!user) {
+      if (c.req.path.startsWith("/api/")) {
+        return c.json({ error: "Unauthorized", message: "Authentication required" }, 401);
+      }
       return c.redirect("/auth/login");
     }
 
-    const groups = user.groups || [];
+    const groups = (user.groups as string[]) || [];
     if (!groups.includes(groupName)) {
-      return c.html(
-        `<!DOCTYPE html>
-        <html>
-          <head>
-            <title>403 Forbidden - Access Denied</title>
-            <script src="https://cdn.tailwindcss.com"></script>
-          </head>
-          <body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center p-4">
-            <div class="max-w-md w-full bg-slate-800 border border-red-500/30 rounded-xl p-8 shadow-2xl text-center">
-              <div class="w-16 h-16 bg-red-500/10 text-red-400 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl font-bold">⛔</div>
-              <h1 class="text-2xl font-bold text-red-400 mb-2">403 Forbidden</h1>
-              <p class="text-slate-300 text-sm mb-6">
-                Your account <strong class="text-white">${user.preferred_username || user.name}</strong> does not belong to the required group <span class="bg-red-500/20 text-red-300 px-2 py-0.5 rounded font-mono text-xs">${groupName}</span>.
-              </p>
-              <div class="bg-slate-950/60 p-3 rounded-lg text-left text-xs text-slate-400 mb-6 font-mono">
-                <div>Your current groups:</div>
-                <div class="text-emerald-400 mt-1">${JSON.stringify(groups)}</div>
-              </div>
-              <a href="/" class="inline-block bg-slate-700 hover:bg-slate-600 text-white font-medium px-4 py-2 rounded-lg text-sm transition">
-                Return to Home
-              </a>
-            </div>
-          </body>
-        </html>`,
-        403
-      );
+      if (c.req.path.startsWith("/api/")) {
+        return c.json(
+          {
+            error: "Forbidden",
+            message: `Access denied. Group '${groupName}' required.`,
+            userGroups: groups,
+          },
+          403
+        );
+      }
+      return renderForbiddenHtml(c, user, `Group: ${groupName}`, groups);
+    }
+
+    await next();
+  };
+}
+
+/**
+ * Route guard that requires one specific role.
+ */
+export function requireRole(role: string): MiddlewareHandler {
+  return requireAnyRole([role]);
+}
+
+/**
+ * Route guard that requires at least one of the specified roles (OR logic).
+ */
+export function requireAnyRole(roles: string[]): MiddlewareHandler {
+  return async (c: Context, next) => {
+    const user = getEffectiveUser(c);
+    if (!user) {
+      if (c.req.path.startsWith("/api/")) {
+        return c.json({ error: "Unauthorized", message: "Authentication required" }, 401);
+      }
+      return c.redirect("/auth/login");
+    }
+
+    const userRoles = (user.roles as string[]) || [];
+    const hasRole = roles.some((r) => userRoles.includes(r));
+
+    if (!hasRole) {
+      if (c.req.path.startsWith("/api/")) {
+        return c.json(
+          {
+            error: "Forbidden",
+            message: `Access denied. Requires one of roles: [${roles.join(", ")}]`,
+            userRoles,
+          },
+          403
+        );
+      }
+      return renderForbiddenHtml(c, user, `Role: ${roles.join(" or ")}`, userRoles);
+    }
+
+    await next();
+  };
+}
+
+/**
+ * Route guard that requires all of the specified roles (AND logic).
+ */
+export function requireAllRoles(roles: string[]): MiddlewareHandler {
+  return async (c: Context, next) => {
+    const user = getEffectiveUser(c);
+    if (!user) {
+      if (c.req.path.startsWith("/api/")) {
+        return c.json({ error: "Unauthorized", message: "Authentication required" }, 401);
+      }
+      return c.redirect("/auth/login");
+    }
+
+    const userRoles = (user.roles as string[]) || [];
+    const hasAll = roles.every((r) => userRoles.includes(r));
+
+    if (!hasAll) {
+      if (c.req.path.startsWith("/api/")) {
+        return c.json(
+          {
+            error: "Forbidden",
+            message: `Access denied. Requires all roles: [${roles.join(", ")}]`,
+            userRoles,
+          },
+          403
+        );
+      }
+      return renderForbiddenHtml(c, user, `Roles: ${roles.join(" and ")}`, userRoles);
+    }
+
+    await next();
+  };
+}
+
+/**
+ * Route guard that requires a specific permission.
+ */
+export function requirePermission(permission: string): MiddlewareHandler {
+  return async (c: Context, next) => {
+    const user = getEffectiveUser(c);
+    if (!user) {
+      if (c.req.path.startsWith("/api/")) {
+        return c.json({ error: "Unauthorized", message: "Authentication required" }, 401);
+      }
+      return c.redirect("/auth/login");
+    }
+
+    const permissions = (user.permissions as string[]) || [];
+    if (!permissions.includes(permission)) {
+      if (c.req.path.startsWith("/api/")) {
+        return c.json(
+          {
+            error: "Forbidden",
+            message: `Access denied. Missing permission: '${permission}'`,
+            userPermissions: permissions,
+          },
+          403
+        );
+      }
+      return renderForbiddenHtml(c, user, `Permission: ${permission}`, permissions);
     }
 
     await next();

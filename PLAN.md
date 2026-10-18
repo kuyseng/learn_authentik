@@ -98,12 +98,12 @@
 
 | #   | Section                                                    | Status |
 | --- | ---------------------------------------------------------- | ------ |
-| 6.1 | Theory: Groups, Roles & Claims in OIDC                    | ⬜     |
-| 6.2 | Create groups in Authentik (admin, user, editor)           | ⬜     |
-| 6.3 | Map groups to OIDC claims (custom scopes/claims)           | ⬜     |
-| 6.4 | Enforce roles in Hono middleware                           | ⬜     |
-| 6.5 | Conditional UI rendering based on roles                    | ⬜     |
-| 6.6 | Authentik Policies: restrict app access by group           | ⬜     |
+| 6.1 | Theory: Groups, Roles & Claims in OIDC                    | ✅     |
+| 6.2 | Create groups in Authentik (admin, user, editor)           | ✅     |
+| 6.3 | Map groups to OIDC claims (custom scopes/claims)           | ✅     |
+| 6.4 | Enforce roles in Hono middleware                           | ✅     |
+| 6.5 | Conditional UI rendering based on roles                    | ✅     |
+| 6.6 | Authentik Policies: restrict app access by group           | ✅     |
 
 **Goal**: Role-based access control driven by Authentik groups.
 
@@ -177,7 +177,7 @@
 | 3       | SSR App: Auth Code Flow        | ✅     |
 | 4       | SPA App: PKCE Flow             | ✅     |
 | 5       | SSO Across Apps                | ✅     |
-| 6       | RBAC: Roles & Permissions      | ⬜     |
+| 6       | RBAC: Roles & Permissions      | ✅     |
 | 7       | API-to-API: Client Credentials | ⬜     |
 | 8       | Forward Auth with Traefik      | ⬜     |
 | 9       | User Profile Management        | ⬜     |

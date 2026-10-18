@@ -9,7 +9,7 @@ const AUTH_CONFIG = {
   tokenUrl: "https://auth.local.dev/application/o/token/",
   clientId: "dashboard-client",
   redirectUri: "https://dashboard.local.dev/callback",
-  scope: "openid profile email",
+  scope: "openid profile email roles",
 };
 
 interface TokenResponse {
@@ -26,6 +26,9 @@ interface UserProfile {
   preferred_username?: string;
   email?: string;
   groups?: string[];
+  roles?: string[];
+  permissions?: string[];
+  is_admin?: boolean;
   [key: string]: any;
 }
 
@@ -33,6 +36,7 @@ export function App() {
   const [tokens, setTokens] = useState<TokenResponse | null>(null);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [apiData, setApiData] = useState<any>(null);
+  const [adminData, setAdminData] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -168,11 +172,28 @@ export function App() {
     }
   }
 
+  // Call Admin-Only Hono API (Requires 'admin' role)
+  async function callAdminApi() {
+    if (!tokens) return;
+    try {
+      const res = await fetch("/api/admin/system", {
+        headers: {
+          Authorization: `Bearer ${tokens.access_token}`,
+        },
+      });
+      const data = await res.json();
+      setAdminData(data);
+    } catch (err: any) {
+      setError(`Admin API call failed: ${err.message}`);
+    }
+  }
+
   // Local Logout
   function handleLogout() {
     setTokens(null);
     setUser(null);
     setApiData(null);
+    setAdminData(null);
   }
 
   return (
@@ -236,6 +257,7 @@ export function App() {
             </div>
 
             {/* User Claims Card */}
+            {/* User Claims Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-2">
                 <span className="text-xs text-slate-400 uppercase font-semibold">User Identity</span>
@@ -243,12 +265,12 @@ export function App() {
                 <p className="text-xs text-slate-400 font-mono">{user.sub}</p>
               </div>
               <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-2">
-                <span className="text-xs text-slate-400 uppercase font-semibold">Email</span>
+                <span className="text-xs text-slate-400 uppercase font-semibold">Email & Status</span>
                 <p className="text-lg font-bold text-white">{user.email || "No email claim"}</p>
                 <p className="text-xs text-emerald-400 font-medium">Verified Account</p>
               </div>
               <div className="p-5 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-2">
-                <span className="text-xs text-slate-400 uppercase font-semibold">Groups / Roles</span>
+                <span className="text-xs text-slate-400 uppercase font-semibold">Authentik Groups & Roles</span>
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {user.groups && user.groups.length > 0 ? (
                     user.groups.map((g) => (
@@ -262,9 +284,51 @@ export function App() {
                   ) : (
                     <span className="text-xs text-slate-500">No groups assigned</span>
                   )}
+                  {user.roles && user.roles.length > 0 ? (
+                    user.roles.map((r) => (
+                      <span
+                        key={r}
+                        className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono font-semibold"
+                      >
+                        role:{r}
+                      </span>
+                    ))
+                  ) : null}
                 </div>
               </div>
             </div>
+
+            {/* Conditional Admin Operations Card (Section 6.5) */}
+            {user.roles?.includes("admin") || user.groups?.includes("lab-admins") ? (
+              <div className="p-6 rounded-2xl border border-amber-500/30 bg-amber-500/5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-amber-400 font-bold">🛡️ Admin Operations Console</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono font-bold">
+                        role: admin
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-1">
+                      This panel is <strong className="text-white">conditionally rendered</strong> because you have the <strong className="text-amber-300">admin</strong> role.
+                      Calls protected <code className="text-indigo-400">/api/admin/system</code>.
+                    </p>
+                  </div>
+                  <button
+                    onClick={callAdminApi}
+                    className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold shadow transition"
+                  >
+                    Call /api/admin/system
+                  </button>
+                </div>
+
+                {adminData && (
+                  <div className="mt-4 p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-amber-300 overflow-x-auto">
+                    <pre>{JSON.stringify(adminData, null, 2)}</pre>
+                  </div>
+                )}
+              </div>
+            ) : null}
 
             {/* API Test Section */}
             <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/60 space-y-4">
@@ -273,7 +337,7 @@ export function App() {
                   <h2 className="text-lg font-bold text-white">Protected REST API Test</h2>
                   <p className="text-xs text-slate-400 mt-0.5">
                     Sends <code className="text-indigo-400">Authorization: Bearer &lt;access_token&gt;</code> to{" "}
-                    <code className="text-slate-300">/api/stats</code>
+                    <code className="text-slate-300">/api/stats</code> (requires <strong className="text-indigo-300">developer</strong> or <strong className="text-indigo-300">admin</strong>)
                   </p>
                 </div>
                 <button

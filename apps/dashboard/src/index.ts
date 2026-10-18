@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { requireRole, requireAnyRole } from "@authentik-lab/auth";
 
 // In local development with self-signed TLS certs (*.local.dev)
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
@@ -96,8 +97,9 @@ app.get("/callback", (c) => c.html(htmlShell));
 
 // ---------------------------------------------------------------------------
 // Route: Protected REST API (Secured with JWT Middleware)
+// Route: Protected REST API (Requires 'developer' or 'admin' role)
 // ---------------------------------------------------------------------------
-app.get("/api/stats", requireJwtAuth(), (c) => {
+app.get("/api/stats", requireJwtAuth(), requireAnyRole(["developer", "admin"]), (c) => {
   const user = c.get("jwtUser");
   return c.json({
     status: "ok",
@@ -108,11 +110,31 @@ app.get("/api/stats", requireJwtAuth(), (c) => {
       username: user.preferred_username,
       email: user.email,
       groups: user.groups || [],
+      roles: user.roles || [],
+      permissions: user.permissions || [],
     },
     metrics: {
       uptime: "99.99%",
       activeClusters: 4,
       totalDeployments: 42,
+    },
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Route: Admin-Only System API (Requires 'admin' role)
+// ---------------------------------------------------------------------------
+app.get("/api/admin/system", requireJwtAuth(), requireRole("admin"), (c) => {
+  const user = c.get("jwtUser");
+  return c.json({
+    status: "ok",
+    message: `Admin authorization verified for ${user.preferred_username || user.name}!`,
+    timestamp: new Date().toISOString(),
+    system: {
+      databaseStatus: "healthy",
+      redisCluster: "3-node replica set",
+      activeSsoSessions: 14,
+      systemLoad: "0.42, 0.38, 0.25",
     },
   });
 });
