@@ -124,6 +124,50 @@ Let's verify this live across our two running applications:
 
 ---
 
+### Real-World Deep Dive: The 4KB Cookie Limit & The "Too Many Redirects / CSRF" Loop
+
+During live testing, you may encounter an infamous authentication bug:
+> *"After filling credentials, it seems too many redirects, then at the end it says: Invalid state parameter (CSRF detected)."*
+
+Understanding why this occurs reveals a fundamental architectural constraint of web browsers and OIDC tokens:
+
+```mermaid
+flowchart TD
+    subgraph Step1["1. Callback Handler"]
+        T1["OIDC Code Exchanged"] --> T2["Raw Access Token (~1.8KB)<br/>+ ID Token (~1.5KB)<br/>+ Claims JSON (~0.5KB)<br/>= 4,664 Bytes"]
+    end
+
+    subgraph Step2["2. Cookie Limit Exceeded"]
+        T2 --> T3["Set-Cookie: ak_lab_session (Signed: ~4,750 Bytes)"]
+        T3 -->|Exceeds RFC 6265 4,096 byte hard limit| T4["Browser silently drops the session cookie!"]
+    end
+
+    subgraph Step3["3. The Infinite Redirect Loop"]
+        T4 --> R1["Server redirects to /profile"]
+        R1 --> R2["Browser requests /profile without cookie"]
+        R2 -->|requireAuth() sees no user| R3["Server redirects to /auth/login"]
+        R3 -->|New state generated| R4["Redirects to Authentik IdP"]
+        R4 -->|IdP already has SSO session!| R5["Authentik instantly 302s back to /auth/callback"]
+        R5 -->|Rapid loop causes race condition or replay| R6["Halts with: Invalid state parameter (CSRF detected)"]
+    end
+```
+
+#### Why did this happen?
+1. **RFC 6265 Hard Limit**: Web browsers strictly enforce a maximum limit of **4,096 bytes** for any single cookie header (including name, value, attributes, and cryptographic signature).
+2. **OIDC Token Size**: Enterprise OIDC tokens from providers like Authentik are rich cryptographic documents. An RSA-signed Access Token is ~1.8KB, an ID token is ~1.5KB, plus user claims and refresh tokens. Serializing them into a single cookie generates a payload of **~4.7KB**!
+3. **Silent Browser Rejection**: Chrome, Safari, and Firefox do not throw a visible error; they simply reject and drop the oversized `Set-Cookie` header.
+4. **The Resulting Loop**: When `/profile` is accessed, the browser sends no cookie. The app redirects to `/auth/login`, which redirects to Authentik. Because Authentik already holds a valid SSO session, it immediately returns an authorization code back to `/auth/callback`. In the span of milliseconds, multiple round-trips take place until the browser stops due to redirect limits or the state parameter cookie becomes desynchronized, producing the CSRF error.
+
+#### The Fix: The Server-Side Session Store Pattern
+Never store raw OIDC tokens directly inside stateless browser cookies. Instead:
+- Store the full session (`userClaims`, `accessToken`, `idToken`, `refreshToken`) on the **server-side** (e.g., using Bun's native embedded SQLite or Redis).
+- Issue only an opaque, cryptographically signed **Session ID** cookie to the browser (`ak_lab_session=<uuid>`, ~150 bytes total).
+- On each request, resolve the session ID from the server-side store in microseconds.
+
+Our [`packages/auth/src/session.ts`](file:///Users/ben3k/workspace.ben3k/_learn_/authentik_lab_flash/packages/auth/src/session.ts) implements this pattern via `SqliteSessionStore` and `MemorySessionStore`, shrinking the cookie header from **4,750 bytes** down to **158 bytes**!
+
+---
+
 ## 5.3 — Single Logout (SLO) Across Apps
 
 While Single Sign-On makes entering applications effortless, **Single Logout (SLO)** solves the mirror problem: *When a user leaves, how do we safely terminate their identity everywhere?*

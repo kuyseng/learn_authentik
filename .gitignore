@@ -18,3 +18,5 @@ bun.lock
 dist/
 build/
 .cache/
+*.db
+*.db-journal

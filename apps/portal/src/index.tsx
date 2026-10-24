@@ -181,7 +181,25 @@ app.get("/auth/callback", async (c) => {
   // Verify state matches cookie to prevent CSRF
   const savedState = await sessionManager.getState(c);
   if (!savedState || savedState !== state) {
-    return c.text("Invalid state parameter (CSRF detected)", 403);
+    console.warn("CSRF mismatch:", { savedState, queryState: state });
+    return c.html(
+      <Layout>
+        <div class="max-w-md mx-auto bg-slate-900 border border-rose-500/30 rounded-xl p-8 text-center">
+          <div class="text-3xl mb-2">⚠️</div>
+          <h2 class="text-xl font-bold text-rose-400 mb-2">Authentication State Error</h2>
+          <p class="text-sm text-slate-300 mb-4">
+            Invalid state parameter (CSRF protection). This can happen if the page was refreshed after login, the session timed out, or login was initiated in multiple tabs.
+          </p>
+          <a
+            href="/auth/login"
+            class="inline-block bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs px-4 py-2 rounded-lg transition shadow-lg shadow-indigo-600/30"
+          >
+            Restart Login
+          </a>
+        </div>
+      </Layout>,
+      403
+    );
   }
 
   try {
