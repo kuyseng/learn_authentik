@@ -168,6 +168,63 @@ Our [`packages/auth/src/session.ts`](file:///Users/ben3k/workspace.ben3k/_learn_
 
 ---
 
+### 5.2.1 — Seamless IdP-Initiated SSO: Launching from Authentik's App Portal with Zero Prompts
+
+Authentik provides a centralized user dashboard called **"My applications"** (`https://auth.local.dev/if/user/#/library`), which serves as an enterprise launcher for all connected internal and external services.
+
+When a user clicks an application tile in Authentik:
+1. **The User Expectation**: *"I am already authenticated in Authentik. When I launch an app tile, I should go straight in with no button to click to sign in."*
+2. **The OIDC Reality**: Standard OpenID Connect is strictly **SP-Initiated** (Service Provider-initiated) because the application must generate a cryptographic `state`, `nonce`, and PKCE code challenge. Pure IdP-initiated SAML flows do not directly exist in standard OIDC.
+
+```mermaid
+flowchart TD
+    subgraph IdP["Authentik User Portal (auth.local.dev)"]
+        Tile["User clicks 'Developer Portal' tile<br/>meta_launch_url: https://portal.local.dev/"]
+    end
+
+    subgraph AppLaunch["Application Auto-Login Handler"]
+        PortalHit["GET https://portal.local.dev/"]
+        CheckAuth["requireAuth() checks session<br/>No cookie -> 302 /auth/login?returnTo=/"]
+        AuthLogin["/auth/login saves returnTo & state<br/>302 -> /application/o/authorize/"]
+    end
+
+    subgraph IdPAuth["Instant SSO Authorization"]
+        IdPCheck["Authentik detects active authentik_session<br/>Evaluates implicit-consent flow (0 prompts)"]
+        IdPRedirect["302 -> /auth/callback?code=CODE&state=STATE"]
+    end
+
+    subgraph Return["Authenticated Landing"]
+        Callback["/auth/callback exchanges code<br/>Sets session cookie<br/>Redirects to returnTo (/)"]
+        Dashboard["User lands directly on authenticated Dashboard!<br/>Zero clicks or login prompts!"]
+    end
+
+    Tile --> PortalHit
+    PortalHit --> CheckAuth
+    CheckAuth --> AuthLogin
+    AuthLogin --> IdPCheck
+    IdPCheck --> IdPRedirect
+    IdPRedirect --> Callback
+    Callback --> Dashboard
+```
+
+#### How We Configured Zero-Click SSO Across Our Apps:
+
+1. **Configured Authentik `meta_launch_url`**:
+   - `Developer Portal`: `https://portal.local.dev/`
+   - `Developer Dashboard`: `https://dashboard.local.dev/`
+2. **Server-Side Rendered Apps (`apps/portal`)**:
+   - Enforce authentication on the root route (`app.get("/", requireAuth())`).
+   - Store the original destination via `sessionManager.setReturnTo(c, returnTo)`.
+   - On callback, resolve `returnTo` and redirect the user straight to their authenticated dashboard (`/`).
+3. **Single Page Applications (`apps/dashboard`)**:
+   - On initial React mount, if tokens are absent, automatically invoke `handleLogin()` to generate PKCE challenge and bounce through Authentik.
+   - Authentik's active session immediately resolves and returns the authorization code, completing the token exchange and rendering the React dashboard in milliseconds.
+4. **Handling Intentional Sign Out (Avoiding Relogin Loops)**:
+   - In auto-login applications, clicking **"Sign Out"** must invoke **Global Single Logout (SLO)** (`https://auth.local.dev/if/flow/default-invalidation-flow/`).
+   - Terminating the master Authentik session prevents the browser from immediately auto-relogging back in when the user intentionally chose to sign out.
+
+---
+
 ## 5.3 — Single Logout (SLO) Across Apps
 
 While Single Sign-On makes entering applications effortless, **Single Logout (SLO)** solves the mirror problem: *When a user leaves, how do we safely terminate their identity everywhere?*

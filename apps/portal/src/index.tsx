@@ -27,10 +27,10 @@ const sessionManager = new SessionManager();
 app.use("*", createAuthMiddleware(sessionManager));
 
 // ---------------------------------------------------------------------------
-// Route: Home Page (Public)
+// Route: Home Page (Protected Dashboard)
 // ---------------------------------------------------------------------------
-app.get("/", (c) => {
-  const user = c.get("user");
+app.get("/", requireAuth(), (c) => {
+  const user = c.get("user")!;
 
   return c.html(
     <Layout user={user}>
@@ -53,87 +53,57 @@ app.get("/", (c) => {
             </p>
 
             <div class="mt-6 flex flex-wrap gap-4">
-              {user ? (
-                <>
-                  <a
-                    href="/profile"
-                    class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm px-5 py-2.5 rounded-lg shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
-                  >
-                    <span>View User Profile & Claims</span>
-                    <span>→</span>
-                  </a>
-                  <a
-                    href="/admin"
-                    class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-sm px-5 py-2.5 rounded-lg border border-slate-700 transition"
-                  >
-                    Test Admin Access
-                  </a>
-                </>
-              ) : (
-                <a
-                  href="/auth/login"
-                  class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm px-6 py-3 rounded-lg shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
-                >
-                  <span>Log in with Authentik SSO</span>
-                  <span>→</span>
-                </a>
-              )}
+              <a
+                href="/profile"
+                class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm px-5 py-2.5 rounded-lg shadow-lg shadow-indigo-600/30 transition flex items-center gap-2"
+              >
+                <span>View User Profile & Claims</span>
+                <span>→</span>
+              </a>
+              <a
+                href="/developer"
+                class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-sm px-5 py-2.5 rounded-lg border border-slate-700 transition"
+              >
+                Developer Console
+              </a>
+              <a
+                href="/admin"
+                class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-sm px-5 py-2.5 rounded-lg border border-slate-700 transition"
+              >
+                Admin Access
+              </a>
             </div>
           </div>
         </div>
 
         {/* Status / Quick Overview */}
-        {user ? (
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-6">
-              <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Authenticated As</div>
-              <div class="text-lg font-bold text-white">{user.name || user.preferred_username}</div>
-              <div class="text-xs text-slate-400 font-mono mt-1">{user.email}</div>
-            </div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-6">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Authenticated As</div>
+            <div class="text-lg font-bold text-white">{user.name || user.preferred_username}</div>
+            <div class="text-xs text-slate-400 font-mono mt-1">{user.email}</div>
+          </div>
 
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-6">
-              <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Authentik Groups (RBAC)</div>
-              <div class="flex flex-wrap gap-1.5 mt-2">
-                {(user.groups || []).map((grp) => (
-                  <span class="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs px-2.5 py-0.5 rounded-full font-mono">
-                    {grp}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-6">
-              <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Session Security</div>
-              <div class="text-sm font-semibold text-emerald-400 flex items-center gap-1.5 mt-1">
-                <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-                HttpOnly Signed Cookie
-              </div>
-              <div class="text-xs text-slate-400 mt-2">Tokens never exposed to browser JS</div>
+          <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-6">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Authentik Groups (RBAC)</div>
+            <div class="flex flex-wrap gap-1.5 mt-2">
+              {(user.groups || []).map((grp) => (
+                <span class="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs px-2.5 py-0.5 rounded-full font-mono">
+                  {grp}
+                </span>
+              ))}
             </div>
           </div>
-        ) : (
-          <div class="border border-slate-800/80 rounded-xl bg-slate-900/40 p-6 space-y-4">
-            <h3 class="text-base font-semibold text-white">How the Flow Works:</h3>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs">
-              <div class="bg-slate-950 p-4 rounded-lg border border-slate-800">
-                <span class="text-indigo-400 font-bold block mb-1">1. User clicks Log in</span>
-                App generates a random cryptographic state and redirects browser to Authentik's authorize endpoint.
-              </div>
-              <div class="bg-slate-950 p-4 rounded-lg border border-slate-800">
-                <span class="text-indigo-400 font-bold block mb-1">2. User Authenticates</span>
-                User logs in with their credentials at <code class="text-slate-300">auth.local.dev</code>.
-              </div>
-              <div class="bg-slate-950 p-4 rounded-lg border border-slate-800">
-                <span class="text-indigo-400 font-bold block mb-1">3. Callback with Code</span>
-                Authentik redirects back to <code class="text-slate-300">/auth/callback?code=...</code>.
-              </div>
-              <div class="bg-slate-950 p-4 rounded-lg border border-slate-800">
-                <span class="text-indigo-400 font-bold block mb-1">4. Token Exchange</span>
-                Portal server POSTs code + client_secret directly to Authentik to get tokens & sets session cookie.
-              </div>
+
+          <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-6">
+            <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Session Security</div>
+            <div class="text-sm font-semibold text-emerald-400 flex items-center gap-1.5 mt-1">
+              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+              Server-Side Store + HttpOnly Cookie
             </div>
+            <div class="text-xs text-slate-400 mt-2">Tokens never exposed to browser JS</div>
           </div>
-        )}
+        </div>
       </div>
     </Layout>
   );
@@ -143,6 +113,9 @@ app.get("/", (c) => {
 // Route: Login Initiator
 // ---------------------------------------------------------------------------
 app.get("/auth/login", async (c) => {
+  const returnTo = c.req.query("returnTo") || "/";
+  await sessionManager.setReturnTo(c, returnTo);
+
   // Generate random state parameter to mitigate CSRF attacks
   const state = crypto.randomUUID();
   await sessionManager.setState(c, state);
@@ -225,11 +198,13 @@ app.get("/auth/callback", async (c) => {
       },
     });
 
-    // 4. Clean up state cookie
+    // 4. Retrieve returnTo destination and clean up cookies
+    const returnTo = await sessionManager.getReturnTo(c);
     sessionManager.deleteState(c);
+    sessionManager.deleteReturnTo(c);
 
-    // 5. Redirect user to profile page
-    return c.redirect("/profile");
+    // 5. Redirect user to destination page (Home by default or returnTo)
+    return c.redirect(returnTo);
   } catch (err: any) {
     console.error("Callback error:", err);
     return c.text(`Authentication failed: ${err.message}`, 500);
@@ -239,13 +214,12 @@ app.get("/auth/callback", async (c) => {
 // ---------------------------------------------------------------------------
 // Route: Logout Handler
 // ---------------------------------------------------------------------------
-app.get("/auth/logout", (c) => {
-  // Clear local session cookie
-  sessionManager.deleteSession(c);
+app.get("/auth/logout", async (c) => {
+  // Clear local session in server store and cookie
+  await sessionManager.deleteSession(c);
 
-  // Redirect to Authentik's end-session endpoint to terminate SSO session
-  const logoutUrl = oidc.getEndSessionUrl("https://portal.local.dev/");
-  return c.redirect(logoutUrl);
+  // Redirect to Authentik Global SLO (Invalidation Flow)
+  return c.redirect("https://auth.local.dev/if/flow/default-invalidation-flow/");
 });
 
 // ---------------------------------------------------------------------------

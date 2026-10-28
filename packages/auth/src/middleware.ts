@@ -30,6 +30,24 @@ export function getEffectiveUser(c: Context): UserClaims | null {
 }
 
 /**
+ * Helper to build the login redirect URL with an optional returnTo parameter.
+ */
+function getLoginRedirect(c: Context, loginPath: string = "/auth/login"): string {
+  let pathWithQuery = c.req.path;
+  try {
+    const u = new URL(c.req.raw.url);
+    pathWithQuery = u.pathname + u.search;
+  } catch {
+    // fallback
+  }
+  if (!pathWithQuery || pathWithQuery === "/") {
+    return loginPath;
+  }
+  const sep = loginPath.includes("?") ? "&" : "?";
+  return `${loginPath}${sep}returnTo=${encodeURIComponent(pathWithQuery)}`;
+}
+
+/**
  * Route guard that redirects unauthenticated users to the login route.
  */
 export function requireAuth(loginPath: string = "/auth/login"): MiddlewareHandler {
@@ -39,7 +57,7 @@ export function requireAuth(loginPath: string = "/auth/login"): MiddlewareHandle
       if (c.req.path.startsWith("/api/")) {
         return c.json({ error: "Unauthorized", message: "Authentication required" }, 401);
       }
-      return c.redirect(loginPath);
+      return c.redirect(getLoginRedirect(c, loginPath));
     }
     await next();
   };
@@ -98,7 +116,7 @@ export function requireGroup(groupName: string): MiddlewareHandler {
       if (c.req.path.startsWith("/api/")) {
         return c.json({ error: "Unauthorized", message: "Authentication required" }, 401);
       }
-      return c.redirect("/auth/login");
+      return c.redirect(getLoginRedirect(c));
     }
 
     const groups = (user.groups as string[]) || [];
@@ -137,7 +155,7 @@ export function requireAnyRole(roles: string[]): MiddlewareHandler {
       if (c.req.path.startsWith("/api/")) {
         return c.json({ error: "Unauthorized", message: "Authentication required" }, 401);
       }
-      return c.redirect("/auth/login");
+      return c.redirect(getLoginRedirect(c));
     }
 
     const userRoles = (user.roles as string[]) || [];
@@ -171,7 +189,7 @@ export function requireAllRoles(roles: string[]): MiddlewareHandler {
       if (c.req.path.startsWith("/api/")) {
         return c.json({ error: "Unauthorized", message: "Authentication required" }, 401);
       }
-      return c.redirect("/auth/login");
+      return c.redirect(getLoginRedirect(c));
     }
 
     const userRoles = (user.roles as string[]) || [];
@@ -205,7 +223,7 @@ export function requirePermission(permission: string): MiddlewareHandler {
       if (c.req.path.startsWith("/api/")) {
         return c.json({ error: "Unauthorized", message: "Authentication required" }, 401);
       }
-      return c.redirect("/auth/login");
+      return c.redirect(getLoginRedirect(c));
     }
 
     const permissions = (user.permissions as string[]) || [];

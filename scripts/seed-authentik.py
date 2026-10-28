@@ -55,11 +55,9 @@ for u in users:
     user.is_active = True
     user.set_password(u["password"])
     user.save()
-
     for g_name in u["groups"]:
         group = Group.objects.get(name=g_name)
         user.ak_groups.add(group)
-
     status = "Created" if created else "Updated"
     print(f"  [{status}] User: {u['username']} ({u['name']}) -> Groups: {u['groups']}")
 
@@ -111,15 +109,63 @@ app, app_created = Application.objects.get_or_create(
     defaults={
         "name": "Developer Portal",
         "provider": provider,
-        "meta_launch_url": "https://portal.local.dev",
+        "meta_launch_url": "https://portal.local.dev/",
     },
 )
 if not app_created:
     app.name = "Developer Portal"
     app.provider = provider
-    app.meta_launch_url = "https://portal.local.dev"
+    app.meta_launch_url = "https://portal.local.dev/"
     app.save()
 
 print(f"  [{'Created' if app_created else 'Updated'}] Application: {app.name} (Slug: {app.slug}) bound to {provider.name}")
+
+print("\n==> 5. Seeding Application (dashboard)...")
+dash_uris = [
+    RedirectURI(matching_mode=RedirectURIMatchingMode.STRICT, url="https://dashboard.local.dev/callback"),
+    RedirectURI(matching_mode=RedirectURIMatchingMode.STRICT, url="https://dashboard.local.dev/"),
+    RedirectURI(matching_mode=RedirectURIMatchingMode.STRICT, url="http://localhost:3001/callback"),
+    RedirectURI(matching_mode=RedirectURIMatchingMode.STRICT, url="http://localhost:3001/"),
+]
+dash_prov, dash_prov_created = OAuth2Provider.objects.get_or_create(
+    name="dashboard-provider",
+    defaults={
+        "client_id": "dashboard-client",
+        "client_type": "public",
+        "authorization_flow": auth_flow,
+        "invalidation_flow": inval_flow,
+        "signing_key": cert,
+        "include_claims_in_id_token": True,
+    },
+)
+dash_prov.client_id = "dashboard-client"
+dash_prov.client_type = "public"
+dash_prov.redirect_uris = dash_uris
+dash_prov.authorization_flow = auth_flow
+dash_prov.invalidation_flow = inval_flow
+dash_prov.signing_key = cert
+dash_prov.include_claims_in_id_token = True
+dash_prov.save()
+
+for scope_name in ["openid", "email", "profile", "offline_access"]:
+    mapping = ScopeMapping.objects.filter(scope_name=scope_name).first()
+    if mapping:
+        dash_prov.property_mappings.add(mapping)
+
+dash_app, dash_app_created = Application.objects.get_or_create(
+    slug="dashboard",
+    defaults={
+        "name": "Developer Dashboard",
+        "provider": dash_prov,
+        "meta_launch_url": "https://dashboard.local.dev/",
+    },
+)
+if not dash_app_created:
+    dash_app.name = "Developer Dashboard"
+    dash_app.provider = dash_prov
+    dash_app.meta_launch_url = "https://dashboard.local.dev/"
+    dash_app.save()
+
+print(f"  [{'Created' if dash_app_created else 'Updated'}] Application: {dash_app.name} (Slug: {dash_app.slug}) bound to {dash_prov.name}")
 
 print("\n🎉 Authentik Lab Seed Complete!")

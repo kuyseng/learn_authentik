@@ -57,12 +57,20 @@ export function App() {
     }
   }
 
-  // Handle callback on page load
+  // Handle callback on page load or auto-trigger PKCE login
   useEffect(() => {
     async function handleAuth() {
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get("code");
       const state = urlParams.get("state");
+      const errorParam = urlParams.get("error");
+      const errorDesc = urlParams.get("error_description");
+
+      if (errorParam) {
+        setError(errorDesc || errorParam);
+        setLoading(false);
+        return;
+      }
 
       if (code) {
         setLoading(true);
@@ -124,7 +132,8 @@ export function App() {
           setLoading(false);
         }
       } else {
-        setLoading(false);
+        // Enforce auto-login: seamlessly initiate PKCE authorization
+        handleLogin();
       }
     }
 
@@ -188,12 +197,14 @@ export function App() {
     }
   }
 
-  // Local Logout
+  // Global Single Logout
   function handleLogout() {
     setTokens(null);
     setUser(null);
     setApiData(null);
     setAdminData(null);
+    sessionStorage.clear();
+    window.location.href = "https://auth.local.dev/if/flow/default-invalidation-flow/";
   }
 
   return (
@@ -210,34 +221,41 @@ export function App() {
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-6 py-10 flex-1 w-full space-y-8">
         {error && (
-          <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm flex items-start space-x-3">
-            <span className="font-bold">Error:</span>
-            <span>{error}</span>
+          <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300 text-sm flex items-start justify-between">
+            <div>
+              <span className="font-bold mr-2">Authentication Error:</span>
+              <span>{error}</span>
+            </div>
+            <button
+              onClick={handleLogin}
+              className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-xs px-3 py-1 rounded transition"
+            >
+              Retry
+            </button>
           </div>
         )}
 
         {!user ? (
-          /* Unauthenticated Hero */
-          <div className="max-w-2xl mx-auto text-center py-16 space-y-6">
+          /* Connecting / Unauthenticated Splash */
+          <div className="max-w-2xl mx-auto text-center py-20 space-y-6">
             <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-400">
-              <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-              <span>Public Client (No Client Secret)</span>
+              <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>
+              <span>Authentik Single Sign-On</span>
             </div>
-            <h1 className="text-4xl font-extrabold text-white tracking-tight sm:text-5xl">
-              OAuth2 PKCE in a React SPA
+            <h1 className="text-3xl font-extrabold text-white tracking-tight sm:text-4xl">
+              Connecting to Authentik SSO...
             </h1>
-            <p className="text-slate-400 text-base leading-relaxed">
-              This Single Page Application authenticates directly with Authentik using the{" "}
-              <strong className="text-white">Proof Key for Code Exchange (RFC 7636)</strong> flow.
-              No client secrets are bundled into client code.
+            <p className="text-slate-400 text-sm leading-relaxed max-w-md mx-auto">
+              Authenticating seamlessly via PKCE. If you are not redirected automatically, click below.
             </p>
-            <div className="pt-4">
+            <div className="pt-2">
               <button
                 onClick={handleLogin}
                 disabled={loading}
-                className="inline-flex items-center px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium shadow-lg shadow-indigo-600/30 hover:shadow-indigo-500/40 transition disabled:opacity-50"
+                className="inline-flex items-center px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm shadow-lg shadow-indigo-600/30 hover:shadow-indigo-500/40 transition disabled:opacity-50"
               >
-                {loading ? "Authenticating..." : "Sign in with Authentik (PKCE)"}
+                <span>Continue to Sign In</span>
+                <span className="ml-2">→</span>
               </button>
             </div>
           </div>

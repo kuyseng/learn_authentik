@@ -5,6 +5,7 @@ import type { AuthSession } from "./types";
 
 const SESSION_COOKIE_NAME = "ak_lab_session";
 const STATE_COOKIE_NAME = "ak_lab_state";
+const RETURN_TO_COOKIE_NAME = "ak_lab_return_to";
 const DEFAULT_SECRET = "authentik-lab-dev-secret-key-32-chars-long!";
 
 /**
@@ -185,6 +186,31 @@ export class SessionManager {
 
   deleteState(c: Context): void {
     deleteCookie(c, STATE_COOKIE_NAME, {
+      path: "/",
+      secure: true,
+    });
+  }
+
+  async setReturnTo(c: Context, returnTo: string): Promise<void> {
+    await setSignedCookie(c, RETURN_TO_COOKIE_NAME, returnTo, this.secret, {
+      path: "/",
+      httpOnly: true,
+      secure: true,
+      sameSite: "Lax",
+      maxAge: 600, // 10 minutes
+    });
+  }
+
+  async getReturnTo(c: Context): Promise<string> {
+    const returnTo = await getSignedCookie(c, this.secret, RETURN_TO_COOKIE_NAME);
+    if (!returnTo || !returnTo.startsWith("/") || returnTo.startsWith("//")) {
+      return "/";
+    }
+    return returnTo;
+  }
+
+  deleteReturnTo(c: Context): void {
+    deleteCookie(c, RETURN_TO_COOKIE_NAME, {
       path: "/",
       secure: true,
     });
