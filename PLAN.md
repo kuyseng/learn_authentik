@@ -113,12 +113,12 @@
 
 | #   | Section                                                    | Status |
 | --- | ---------------------------------------------------------- | ------ |
-| 7.1 | Theory: Machine-to-machine auth, no user involved         | ⬜     |
-| 7.2 | Create `apps/api` — internal microservice                  | ⬜     |
-| 7.3 | Configure Authentik: service account + Client Credentials  | ⬜     |
-| 7.4 | Implement token acquisition in calling service             | ⬜     |
-| 7.5 | JWT validation on the receiving service                    | ⬜     |
-| 7.6 | Scopes & permissions for service accounts                  | ⬜     |
+| 7.1 | Theory: Machine-to-machine auth, no user involved         | ✅     |
+| 7.2 | Create `apps/api` — internal microservice                  | ✅     |
+| 7.3 | Configure Authentik: service account + Client Credentials  | ✅     |
+| 7.4 | Implement token acquisition in calling service             | ✅     |
+| 7.5 | JWT validation on the receiving service                    | ✅     |
+| 7.6 | Scopes & permissions for service accounts                  | ✅     |
 
 **Goal**: Secure service-to-service communication via OAuth2.
 
@@ -178,7 +178,7 @@
 | 4       | SPA App: PKCE Flow             | ✅     |
 | 5       | SSO Across Apps                | ✅     |
 | 6       | RBAC: Roles & Permissions      | ✅     |
-| 7       | API-to-API: Client Credentials | ⬜     |
+| 7       | API-to-API: Client Credentials | ✅     |
 | 8       | Forward Auth with Traefik      | ⬜     |
 | 9       | User Profile Management        | ⬜     |
 | 10      | Production Considerations      | ⬜     |

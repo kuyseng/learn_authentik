@@ -7,6 +7,7 @@ import {
   requireGroup,
   requireRole,
   requireAnyRole,
+  ClientCredentialsClient,
 } from "@authentik-lab/auth";
 import { Layout } from "./layout";
 
@@ -22,6 +23,14 @@ const oidc = new OIDCClient({
 });
 
 const sessionManager = new SessionManager();
+
+// Chapter 7: Machine-to-Machine Client Credentials Client
+const apiClient = new ClientCredentialsClient({
+  tokenUrl: "https://auth.local.dev/application/o/token/",
+  clientId: "api-service-client",
+  clientSecret: "api-service-secret-123456",
+  scopes: ["service:read", "system:metrics"],
+});
 
 // 2. Attach global session middleware
 app.use("*", createAuthMiddleware(sessionManager));
@@ -365,6 +374,115 @@ app.get("/admin", requireRole("admin"), (c) => {
               <div class="font-bold text-white mb-0.5">Audit Log Export</div>
               <div class="text-[10px] text-slate-400">Download security trail</div>
             </button>
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Route: M2M Services (Chapter 7: Client Credentials Demonstration)
+// ---------------------------------------------------------------------------
+app.get("/services", requireAuth(), async (c) => {
+  const user = c.get("user")!;
+  let apiData: any = null;
+  let metricsData: any = null;
+  let fetchError: string | null = null;
+  let tokenPreview: string = "";
+
+  try {
+    const token = await apiClient.getAccessToken();
+    tokenPreview = `${token.slice(0, 32)}...${token.slice(-16)}`;
+
+    // 1. Fetch analytical reports (requires service:read)
+    const reportRes = await apiClient.fetchWithAuth("https://api.local.dev/api/reports");
+    if (reportRes.ok) {
+      apiData = await reportRes.json();
+    } else {
+      fetchError = `Reports Error (${reportRes.status}): ${await reportRes.text()}`;
+    }
+
+    // 2. Fetch cluster telemetry (requires system:metrics)
+    const metricsRes = await apiClient.fetchWithAuth("https://api.local.dev/api/system/metrics");
+    if (metricsRes.ok) {
+      metricsData = await metricsRes.json();
+    }
+  } catch (err: any) {
+    fetchError = err.message;
+  }
+
+  return c.html(
+    <Layout user={user} title="M2M Internal Services — Developer Portal">
+      <div class="space-y-6">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-lg bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-xl font-bold">
+            ⚡
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold text-white">Machine-to-Machine (M2M) Microservice Call</h1>
+            <p class="text-slate-400 text-sm mt-0.5">
+              Demonstrating OAuth2 Client Credentials Flow (<code class="text-emerald-400">RFC 6749 §4.4</code>)
+            </p>
+          </div>
+        </div>
+
+        {/* Informational banner */}
+        <div class="bg-indigo-950/40 border border-indigo-500/30 rounded-xl p-6 text-sm text-slate-300 space-y-2">
+          <div class="font-semibold text-white flex items-center gap-2">
+            <span>ℹ️</span>
+            <span>How This Request Works</span>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            The browser authenticated you (<strong class="text-white">{user.preferred_username}</strong>) using
+            an OIDC Authorization Code session. Then, when rendering this page, the <strong class="text-white">Portal Backend</strong> contacted Authentik directly using its own
+            <strong class="text-white"> Service Account credentials</strong> (<code class="text-indigo-300 font-mono">api-service-client</code>) to obtain an RS256 machine token, and queried the internal microservice at <code class="text-indigo-300 font-mono">https://api.local.dev/</code>.
+          </p>
+          <div class="pt-2 text-xs font-mono text-emerald-400 flex items-center gap-2">
+            <span class="text-slate-500">Active M2M Token:</span>
+            <span class="bg-slate-900 px-2 py-0.5 rounded border border-slate-800">{tokenPreview || "Loading..."}</span>
+          </div>
+        </div>
+
+        {fetchError && (
+          <div class="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-300 text-xs font-mono">
+            ⚠️ <strong>Microservice Error:</strong> {fetchError}
+          </div>
+        )}
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Card 1: Reports Data */}
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+              <h2 class="font-bold text-sm text-white">Analytics Report Payload</h2>
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded font-mono">
+                Scope: service:read
+              </span>
+            </div>
+            {apiData ? (
+              <pre class="bg-slate-950 p-4 rounded-lg border border-slate-800/80 text-xs font-mono text-emerald-300 overflow-x-auto">
+                {JSON.stringify(apiData, null, 2)}
+              </pre>
+            ) : (
+              <div class="text-xs text-slate-500 font-mono italic">No report data received</div>
+            )}
+          </div>
+
+          {/* Card 2: Metrics Data */}
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+              <h2 class="font-bold text-sm text-white">Cluster Telemetry Payload</h2>
+              <span class="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded font-mono">
+                Scope: system:metrics
+              </span>
+            </div>
+            {metricsData ? (
+              <pre class="bg-slate-950 p-4 rounded-lg border border-slate-800/80 text-xs font-mono text-cyan-300 overflow-x-auto">
+                {JSON.stringify(metricsData, null, 2)}
+              </pre>
+            ) : (
+              <div class="text-xs text-slate-500 font-mono italic">No metrics data received</div>
+            )}
           </div>
         </div>
       </div>

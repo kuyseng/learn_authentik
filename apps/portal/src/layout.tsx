@@ -35,6 +35,10 @@ export const Layout: FC<PropsWithChildren<LayoutProps>> = ({
             <span class="text-slate-500 uppercase font-bold tracking-wider text-[10px]">Portal Pages:</span>
             <a href="/" class="hover:text-white transition">Home</a>
             <a href="/profile" class="hover:text-white transition">Profile</a>
+            <a href="/services" class="hover:text-white transition flex items-center gap-1.5">
+              <span>M2M Services</span>
+              <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">API</span>
+            </a>
             <a href="/developer" class="hover:text-white transition flex items-center gap-1.5">
               <span>Dev Console</span>
               <span class="text-[9px] px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-mono">Dev</span>

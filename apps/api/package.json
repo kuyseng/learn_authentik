@@ -1,0 +1,13 @@
+{
+  "name": "api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun --hot src/index.ts"
+  },
+  "dependencies": {
+    "@authentik-lab/auth": "workspace:*",
+    "hono": "^4.13.13",
+    "jose": "^6.2.12"
+  }
+}
