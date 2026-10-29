@@ -207,19 +207,45 @@ flowchart TD
     Callback --> Dashboard
 ```
 
-#### How We Configured Zero-Click SSO Across Our Apps:
+#### Step-by-Step Authentik Admin UI Guide: Configuring Zero-Click SSO Launch URLs
 
-1. **Configured Authentik `meta_launch_url`**:
-   - `Developer Portal`: `https://portal.local.dev/`
-   - `Developer Dashboard`: `https://dashboard.local.dev/`
-2. **Server-Side Rendered Apps (`apps/portal`)**:
+To enable seamless launch from Authentik's *"My applications"* catalog into our applications:
+
+##### Part 1: Setting Application Launch URLs
+1. Open your browser to **`https://auth.local.dev/`** and sign in as **`akadmin`**.
+2. Click **Admin interface** in the upper right.
+3. In the left navigation sidebar, navigate to **Applications** → **Applications**.
+4. Configure **`Developer Portal`**:
+   - Locate `Developer Portal` in the list and click the pencil icon (✎) to **Edit**.
+   - Set **Launch URL**: `https://portal.local.dev/`
+   - Click **Update**.
+5. Configure **`Developer Dashboard`**:
+   - Locate `Developer Dashboard` and click the pencil icon (✎) to **Edit**.
+   - Set **Launch URL**: `https://dashboard.local.dev/`
+   - Click **Update**.
+
+##### Part 2: Ensuring Instant Authorization (No Consent Prompts)
+To prevent Authentik from stopping the user with an *"Application authorization request"* consent dialog on every SSO launch:
+1. Navigate to **Applications** → **Providers** in the left sidebar.
+2. Edit **`portal-provider`**:
+   - Ensure **Authorization flow** is set to: `default-provider-authorization-implicit-consent`.
+   - Click **Update**.
+3. Edit **`dashboard-provider`**:
+   - Ensure **Authorization flow** is set to: `default-provider-authorization-implicit-consent`.
+   - Click **Update**.
+
+---
+
+#### How Client Apps Handle the Auto-Login:
+
+1. **Server-Side Rendered Apps (`apps/portal`)**:
    - Enforce authentication on the root route (`app.get("/", requireAuth())`).
    - Store the original destination via `sessionManager.setReturnTo(c, returnTo)`.
    - On callback, resolve `returnTo` and redirect the user straight to their authenticated dashboard (`/`).
-3. **Single Page Applications (`apps/dashboard`)**:
+2. **Single Page Applications (`apps/dashboard`)**:
    - On initial React mount, if tokens are absent, automatically invoke `handleLogin()` to generate PKCE challenge and bounce through Authentik.
    - Authentik's active session immediately resolves and returns the authorization code, completing the token exchange and rendering the React dashboard in milliseconds.
-4. **Handling Intentional Sign Out (Avoiding Relogin Loops)**:
+3. **Handling Intentional Sign Out (Avoiding Relogin Loops)**:
    - In auto-login applications, clicking **"Sign Out"** must invoke **Global Single Logout (SLO)** (`https://auth.local.dev/if/flow/default-invalidation-flow/`).
    - Terminating the master Authentik session prevents the browser from immediately auto-relogging back in when the user intentionally chose to sign out.
 

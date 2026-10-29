@@ -114,19 +114,42 @@ To test RBAC across our applications, we define three standard personas:
 
 ---
 
-### Step-by-Step: Managing Groups in Authentik UI
+### Step-by-Step Authentik Admin UI Guide: Managing Groups & Users
 
-1. Open your browser to **`https://auth.local.dev/`** and sign in as `akadmin`.
-2. Expand the left navigation menu: **Directory** → **Groups**.
-3. Click **Create** to create each group:
-   - Name: `lab-admins`
-   - Name: `lab-developers`
-   - Name: `lab-users`
-4. Assign users to groups:
-   - Navigate to **Directory** → **Users**.
-   - Click user **`ben3k`** → **Groups** tab → Add to `lab-admins` and `lab-developers`.
-   - Click user **`alice`** → **Groups** tab → Add to `lab-developers`.
-   - Click user **`bob`** → **Groups** tab → Add to `lab-users`.
+#### Part 1: Creating Organizational Groups
+1. Open your browser to **`https://auth.local.dev/`** and sign in as **`akadmin`**.
+2. In the top-right header, click **Admin interface** (if not already in the admin console).
+3. Expand the left navigation sidebar: **Directory** → **Groups**.
+4. Click the blue **Create** button in the upper-right corner.
+5. Create each of the three groups using the following parameters:
+
+| Field | Group 1 | Group 2 | Group 3 | Purpose |
+|---|---|---|---|---|
+| **Name** | `lab-admins` | `lab-developers` | `lab-users` | Unique group identifier in Authentik DB |
+| **Is Superuser?** | Unchecked | Unchecked | Unchecked | Only check for Authentik server superadmins |
+| **Parent** | *(None)* | *(None)* | *(None)* | Flat hierarchy |
+
+6. Click **Create** to save each group. You will see all three groups listed in the Groups table.
+
+---
+
+#### Part 2: Assigning Users to Groups
+1. Navigate to **Directory** → **Users** in the left sidebar.
+2. Configure **`ben3k`**:
+   - Click on the username **`ben3k`** (or click the three-dots ⋮ icon → **Edit**).
+   - In the user detail screen, switch to the **Groups** tab.
+   - Click **Add to group**.
+   - Select **`lab-admins`** and click **Add**.
+   - Click **Add to group** again, select **`lab-developers`**, and click **Add**.
+3. Configure **`alice`**:
+   - Return to **Directory** → **Users** and click **`alice`**.
+   - Switch to the **Groups** tab → Click **Add to group** → Select **`lab-developers`** → Click **Add**.
+4. Configure **`bob`**:
+   - Return to **Directory** → **Users** and click **`bob`**.
+   - Switch to the **Groups** tab → Click **Add to group** → Select **`lab-users`** → Click **Add**.
+
+> [!TIP]
+> **Automated Verification**: If you ever reset your Docker database, you can run `docker exec -i authentik-server ak shell < scripts/seed-authentik.py` to recreate these users and group bindings automatically.
 
 ---
 
@@ -146,24 +169,32 @@ There is no standard `roles` scope in the base OIDC specification. Different ide
 
 ---
 
-### How Authentik Scope Mappings Work
+### Step-by-Step Authentik Admin UI Guide: Creating the Custom Scope Mapping
 
-In Authentik, a **Scope Mapping** is a Python expression that executes whenever an OAuth2 / OIDC client requests a specific scope name.
+In Authentik, a **Scope Mapping** is a Python expression that executes whenever an OAuth2 / OIDC client requests a specific scope name. It allows you to transform raw group memberships into clean, decoupled application roles and permissions.
 
-The execution context provides rich objects:
-- `request.user`: The Authentik Django `User` model instance.
-- `request.user.ak_groups.all()`: All groups the user belongs to.
-- `provider`: The OAuth2Provider instance issuing the tokens.
-- `request.http_request`: The HTTP request object.
+#### Part 1: Create the Property Mapping
+1. In the Authentik Admin interface, expand the left sidebar: **Customization** → **Property Mappings**.
+2. Click the blue **Create** button in the upper-right corner.
+3. In the modal dialog, Authentik asks: *"Select Property Mapping type"*.
+   - Select **Scope Mapping** (used for OpenID Connect / OAuth2).
+   - Click **Next**.
+4. Fill out the Scope Mapping form with the exact settings below:
 
-We create a custom Scope Mapping named **`authentik lab: Roles and Permissions`** bound to scope **`roles`**:
+| Field | Value | Purpose |
+|---|---|---|
+| **Name** | `authentik lab: Roles and Permissions` | Descriptive label in Authentik's mapping catalog |
+| **Scope name** | `roles` | The exact OAuth2 scope that triggers this mapping (e.g. `scope="openid profile email roles"`) |
+| **Description** | `Maps Authentik groups (lab-admins, lab-developers, lab-users) to app roles and permissions.` | Admin documentation note |
+| **Expression** | *(Paste the Python code below)* | The Python function executed by Authentik's Celery/Worker |
 
 ```python
 # Authentik Scope Mapping Expression
+# Context variables available: request.user, provider, request.http_request
 groups = [g.name for g in request.user.ak_groups.all()]
 roles = []
 
-# Map organizational groups to application roles
+# 1. Map organizational groups to application roles
 if "lab-admins" in groups:
     roles.append("admin")
 if "lab-developers" in groups:
@@ -171,6 +202,7 @@ if "lab-developers" in groups:
 if "lab-users" in groups:
     roles.append("viewer")
 
+# 2. Return dictionary of custom claims injected into tokens
 return {
     "roles": roles,
     "is_admin": "lab-admins" in groups,
@@ -182,16 +214,54 @@ return {
 }
 ```
 
-### Attaching the Scope Mapping to Providers
+5. Click **Create** to save the mapping.
 
-The mapping is attached to both of our OIDC Providers:
-- `portal-provider` (for `apps/portal`)
-- `dashboard-provider` (for `apps/dashboard`)
+---
 
-When an application requests `scope: "openid profile email roles"`, Authentik evaluates this expression and injects `roles`, `permissions`, and `is_admin` directly into:
-1. The **ID Token** (used by client applications and SSR session managers).
-2. The **Access Token** (used as a Bearer JWT by resource APIs).
-3. The **UserInfo endpoint** (`/application/o/userinfo/`).
+#### Part 2: Test the Mapping Live Using Authentik's Built-In Evaluator
+
+Before launching our applications, Authentik lets you test Property Mappings live against real users directly inside the Admin UI!
+
+1. Still on the **Customization** → **Property Mappings** page, locate **`authentik lab: Roles and Permissions`** in the table.
+2. On the right side of the row, click the three-dots (⋮) menu button → Click **Test**.
+3. In the **Test Property Mapping** modal dialog:
+   - In the **User** dropdown, search for and select **`ben3k`**.
+   - Click **Test**.
+   - In the **Result** preview box, verify the output:
+     ```json
+     {
+       "roles": ["admin", "developer"],
+       "is_admin": true,
+       "permissions": ["read:profile", "read:stats", "deploy:app", "manage:users", "system:admin"]
+     }
+     ```
+4. Repeat the test for **`alice`**:
+   - Change User to **`alice`** → Click **Test**.
+   - Verify: `"roles": ["developer"]`, `"is_admin": false`, `"permissions": ["read:profile", "read:stats", "deploy:app"]`.
+5. Repeat the test for **`bob`**:
+   - Change User to **`bob`** → Click **Test**.
+   - Verify: `"roles": ["viewer"]`, `"is_admin": false`, `"permissions": ["read:profile"]`.
+6. Click **Close**. You have confirmed that the Python mapping works with 100% precision!
+
+---
+
+#### Part 3: Attach the Scope Mapping to OAuth2 Providers
+
+Now that the mapping exists, we must bind it to the providers so Authentik evaluates it during token minting.
+
+1. In the left sidebar, navigate to **Applications** → **Providers**.
+2. **Update `portal-provider`**:
+   - Locate `portal-provider` and click the pencil icon (✎) to **Edit**.
+   - Scroll down to the **Advanced protocol settings** section (click to expand).
+   - In the **Selected property mappings** (or Scope mappings) list, locate **`authentik lab: Roles and Permissions`** and check its box (ensure `authentik default OAuth Mapping: OpenID 'openid'`, `'email'`, and `'profile'` remain checked as well).
+   - Click **Update**.
+3. **Update `dashboard-provider`**:
+   - Locate `dashboard-provider` and click the pencil icon (✎) to **Edit**.
+   - Expand **Advanced protocol settings**.
+   - Check **`authentik lab: Roles and Permissions`**.
+   - Click **Update**.
+
+Now, whenever `apps/portal` or `apps/dashboard` requests `scope=openid profile email roles`, Authentik automatically injects `roles`, `permissions`, and `is_admin` into the ID Token, Access Token, and `/userinfo` endpoint!
 
 ---
 
@@ -352,7 +422,7 @@ In [**`apps/dashboard/src/client/App.tsx`**](file:///Users/ben3k/workspace.ben3k
 
 ---
 
-## 6.6 — Authentik Policies: Restrict App Access by Group
+## 6.6 — Authentik Policies: Restrict App Access by Group (Perimeter Defense)
 
 While application middleware stops users inside an app, Authentik's **Policy Engine** allows you to block users at the **Identity Provider perimeter**.
 
@@ -367,36 +437,85 @@ If an application is restricted to `lab-developers` and `lab-admins`:
 
 ---
 
+### Step-by-Step Authentik Admin UI Guide: Configuring Perimeter Access Policies
+
+Authentik gives you two ways to enforce perimeter access on applications: **Direct Group Binding** (fastest and simplest) and **Group Membership Policies** (for complex multi-rule logic).
+
+#### Method A: Direct Group Binding (Recommended for Simple RBAC)
+
+1. Open the Authentik Admin interface (**`https://auth.local.dev/`**).
+2. In the left sidebar, navigate to **Applications** → **Applications**.
+3. In the applications list, click on **`Developer Dashboard`** (or its slug `dashboard`).
+4. In the application detail view, click the **Policy / Group / User Bindings** tab.
+5. Click the **Bind Group** button (or click **Bind Existing Policy/Group** → select **Group**).
+6. Fill in the binding modal for Developers:
+
+| Field | Value | Purpose |
+|---|---|---|
+| **Group** | `lab-developers` | Grants all members of this group access |
+| **Order** | `0` | Execution priority |
+| **Negate** | Unchecked | If checked, it would deny members of this group |
+| **Enabled** | Checked | Activates the rule |
+
+7. Click **Create**.
+8. Repeat for Administrators:
+   - Click **Bind Group**.
+   - Select Group: **`lab-admins`**.
+   - Order: **`1`**.
+   - Click **Create**.
+
+> [!NOTE]
+> Authentik evaluates multiple group bindings using **OR logic** by default. Any user who is a member of *either* `lab-developers` *or* `lab-admins` will be granted access to launch the application.
+
+---
+
+#### Method B: Reusable Group Membership Policy (Policy Engine)
+
+If you have complex logic (e.g., must be in Group A **AND** Group B, or must have MFA enrolled), use Authentik's formal Policy Engine:
+
+1. Expand the left sidebar: **Customization** → **Policies**.
+2. Click **Create** → In the dropdown, choose **Group Membership Policy** → Click **Next**.
+3. Fill in the policy settings:
+   - **Name**: `policy-allow-developers`
+   - **Group**: `lab-developers`
+4. Click **Create**.
+5. Return to **Applications** → **Applications** → Click **`Developer Dashboard`** → **Policy / Group / User Bindings** tab.
+6. Click **Bind Policy** → Select **`policy-allow-developers`** → Order: `0` → Click **Create**.
+
+---
+
 ### Hands-on Verification: Testing All Three Personas
 
-Let's test all three personas across our applications:
+Now that both **Tier 1 (Perimeter Policy)** and **Tier 2 (Application Middleware)** are configured, let's test all three personas across our applications:
 
 #### Test 1: Ben (Admin)
 1. In an Incognito window, visit **`https://portal.local.dev/`**.
 2. Sign in as **`ben3k`** / `Password123!`.
-3. Visit **`https://portal.local.dev/profile`**:
-   - Notice claims include: `roles: ["admin", "developer"]` and `is_admin: true`.
-4. Visit **`https://portal.local.dev/developer`** → **200 OK (Access Granted)**.
-5. Visit **`https://portal.local.dev/admin`** → **200 OK (Access Granted)**.
-6. Open **`https://dashboard.local.dev/`** → Instant SSO login:
-   - Notice the **Admin Operations Console** card is visible.
-   - Click **Call /api/admin/system** → Returns **200 OK** with system metrics!
+3. Check the authenticated dashboard:
+   - You land directly inside Portal (`/`) without prompts.
+   - Click **View User Profile & Claims** (`/profile`): Claims include `roles: ["admin", "developer"]` and `is_admin: true`.
+4. Click **Developer Console** (`/developer`) → **200 OK (Access Granted)**.
+5. Click **Admin Console** (`/admin`) → **200 OK (Access Granted)**.
+6. Open **`https://dashboard.local.dev/`** (in the same browser session):
+   - Instant SSO login completes.
+   - The **Admin Operations Console** card is visible.
+   - Click **Call /api/admin/system** → Returns **200 OK** with live system metrics!
 
 ---
 
 #### Test 2: Alice (Developer)
-1. Click **Sign Out** or visit **`https://portal.local.dev/auth/logout`**.
-2. Sign in as **`alice`** / `Password123!`.
+1. Click **Sign Out** (this triggers Authentik's Global SLO).
+2. Visit **`https://portal.local.dev/`** and sign in as **`alice`** / `Password123!`.
 3. Visit **`https://portal.local.dev/profile`**:
    - Claims include: `roles: ["developer"]`.
 4. Visit **`https://portal.local.dev/developer`** → **200 OK (Access Granted)**.
-5. Visit **`https://portal.local.dev/admin`**:
+5. Try to visit **`https://portal.local.dev/admin`**:
    - **403 Forbidden!** Intercepted by `requireRole("admin")`.
-   - The page displays: `Your account alice lacks required permission: Role: admin`.
+   - The styled page displays: `Your account alice lacks required permission: Role: admin`.
 6. Open **`https://dashboard.local.dev/`**:
-   - Alice has access to the dashboard.
-   - Notice the **Admin Operations Console** is hidden.
-   - Calling `/api/stats` succeeds; attempting to call `/api/admin/system` returns `403 Forbidden`.
+   - Alice is a member of `lab-developers`, so Authentik's perimeter policy allows her into the Dashboard.
+   - Notice the **Admin Operations Console** is conditionally hidden.
+   - Calling `/api/stats` succeeds with `200 OK`; attempting to call `/api/admin/system` directly returns `403 Forbidden`.
 
 ---
 
@@ -406,8 +525,12 @@ Let's test all three personas across our applications:
    - Claims include: `roles: ["viewer"]`.
 3. Try to visit **`https://portal.local.dev/developer`** → **403 Forbidden!**
 4. Try to visit **`https://portal.local.dev/admin`** → **403 Forbidden!**
-5. If Application Policy Binding is applied on Authentik for `dashboard`:
-   - Trying to sign into `dashboard` results in Authentik blocking Bob at the login screen with **"Access Denied"**!
+5. Now test **Tier 1 Perimeter Defense**:
+   - Navigate to **`https://dashboard.local.dev/`** (or click its tile from Authentik's *"My applications"* page).
+   - **Authentik halts Bob before entering!**
+   - Because Bob is only in `lab-users` (not `lab-developers` or `lab-admins`), Authentik displays:  
+     **"Access Denied: You do not have access to this application."**
+   - Bob never receives an authorization code or token, and `apps/dashboard` is completely protected!
 
 ---
 

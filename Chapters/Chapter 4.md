@@ -186,29 +186,41 @@ sequenceDiagram
 
 ## 4.3 — Configure a New Authentik Provider (Public Client, PKCE)
 
-### Step 1: Public Client Configuration
+### Step-by-Step Authentik Admin UI Guide: Configuring the SPA Public Provider
 
-Unlike confidential clients (which require a `client_secret`), a **Public Client** explicitly signals to Authentik that it cannot protect a secret key.
+Unlike confidential server-side clients (which use a `client_secret`), a **Public Client** explicitly signals to Authentik that it runs in a browser and cannot protect a secret key. Authentik enforces PKCE on public clients to guarantee secure code exchange without secrets.
 
-In Authentik:
-1. **Name**: `dashboard-provider`
-2. **Client Type**: `Public` (Crucial! This tells Authentik not to require HTTP Basic auth or `client_secret` on `/token`).
-3. **Client ID**: `dashboard-client`
-4. **Client Secret**: *(Left blank / empty)*
-5. **Redirect URIs**:
-   - `https://dashboard.local.dev/callback`
-   - `https://dashboard.local.dev/`
-   - `http://localhost:3001/callback`
-   - `http://localhost:3001/`
-6. **Authorization Flow**: `default-provider-authorization-implicit-consent`
-7. **Invalidation Flow**: `default-invalidation-flow`
-8. **Signing Key**: `authentik Self-signed Certificate`
+#### Part 1: Create the Public Provider (`dashboard-provider`)
+1. Open your browser to **`https://auth.local.dev/`** and sign in as **`akadmin`**.
+2. Click **Admin interface** in the top navigation bar.
+3. In the left navigation sidebar, expand **Applications** → **Providers**.
+4. Click the blue **Create** button.
+5. In the modal dialog, select **OAuth2/OpenID Provider** → Click **Next**.
+6. Fill in the form fields with the exact values below:
 
-### Step 2: How Authentik Handles CORS for SPAs
+| Field | Value | Purpose |
+|---|---|---|
+| **Name** | `dashboard-provider` | Provider name in Authentik |
+| **Authorization flow** | `default-provider-authorization-implicit-consent` | Allows instant authorization when SSO session exists |
+| **Invalidation flow** | `default-invalidation-flow` | Flow triggered during logout |
+| **Client type** | `Public` | **Crucial**: Disables `client_secret` requirement on `/token` endpoint |
+| **Client ID** | `dashboard-client` | Public identifier used by the React SPA |
+| **Client Secret** | *(Leave blank / empty)* | Public clients must never have a client secret |
+| **Redirect URIs/Origins** | `https://dashboard.local.dev/callback`<br/>`https://dashboard.local.dev/`<br/>`http://localhost:3001/callback`<br/>`http://localhost:3001/` | Whitelist of allowed redirect endpoints AND allowed CORS origins (one per line) |
+| **Signing Key** | `authentik Self-signed Certificate` | RSA certificate used to sign RS256 JWT tokens |
+
+7. Expand **Advanced protocol settings**:
+   - **Include claims in id_token**: Checked
+   - **Selected property mappings**: Select `OpenID 'openid'`, `'email'`, `'profile'`, and (in Chapter 6) `'authentik lab: Roles and Permissions'`.
+8. Click **Finish**.
+
+---
+
+#### Part 2: How Authentik Handles CORS for SPAs
 
 When a browser executes `fetch("https://auth.local.dev/application/o/token/")`, the browser sends an HTTP `OPTIONS` preflight request. If the server does not return `Access-Control-Allow-Origin: https://dashboard.local.dev`, the browser blocks the token exchange!
 
-In Authentik's `TokenView` (`authentik/providers/oauth2/views/token.py`), Authentik automatically derives the allowed CORS origins from the provider's registered redirect URIs:
+In Authentik's `TokenView` (`authentik/providers/oauth2/views/token.py`), Authentik automatically derives the allowed CORS origins directly from the provider's registered redirect URIs:
 
 ```python
 # Authentik's internal CORS logic in token.py:
@@ -217,20 +229,31 @@ if self.provider:
 cors_allow(self.request, response, *allowed_origins)
 ```
 
-Because `https://dashboard.local.dev/callback` is registered, Authentik automatically returns:
+Because `https://dashboard.local.dev/callback` and `https://dashboard.local.dev/` are registered in the Redirect URIs table, Authentik automatically returns:
 ```http
 Access-Control-Allow-Origin: https://dashboard.local.dev
 Access-Control-Allow-Methods: POST, OPTIONS
 Access-Control-Allow-Headers: Content-Type, Authorization
 ```
 
-### Step 3: Application Binding
+---
 
-We created the corresponding Application in Authentik:
-- **Name**: `Developer Dashboard`
-- **Slug**: `dashboard`
-- **Provider**: `dashboard-provider`
-- **Launch URL**: `https://dashboard.local.dev/`
+#### Part 3: Create the Application (`Developer Dashboard`)
+1. In the left sidebar, navigate to **Applications** → **Applications**.
+2. Click the blue **Create** button.
+3. Fill in the application fields:
+
+| Field | Value | Purpose |
+|---|---|---|
+| **Name** | `Developer Dashboard` | Title displayed on the user's application dashboard |
+| **Slug** | `dashboard` | Unique URL slug (`/application/o/dashboard/`) |
+| **Provider** | `dashboard-provider` | Binds this app to the public client provider created in Part 1 |
+| **Launch URL** | `https://dashboard.local.dev/` | Destination URL when clicking this tile in Authentik |
+
+4. Click **Create**.
+
+> [!TIP]
+> **Automated Setup Alternative**: Running `docker exec -i authentik-server ak shell < scripts/seed-authentik.py` will also idempotently seed `dashboard-provider` and `dashboard` application.
 
 ---
 

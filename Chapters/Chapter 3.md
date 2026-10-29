@@ -56,6 +56,54 @@ Server-rendered applications (SSR) are the gold standard for confidential OAuth2
 
 ---
 
+### Step-by-Step Authentik Admin UI Guide: Configuring Portal Provider & Application
+
+Before running the Portal app, we must register it as a **Confidential OAuth2 / OpenID Connect Client** in Authentik.
+
+#### Part 1: Create the OAuth2/OpenID Provider (`portal-provider`)
+1. Open your browser to **`https://auth.local.dev/`** and log in as **`akadmin`**.
+2. Click **Admin interface** in the upper right.
+3. In the left navigation sidebar, expand **Applications** → **Providers**.
+4. Click the blue **Create** button.
+5. In the modal dialog, select **OAuth2/OpenID Provider** → Click **Next**.
+6. Fill in the provider settings:
+
+| Field | Value | Purpose |
+|---|---|---|
+| **Name** | `portal-provider` | Provider name in Authentik's list |
+| **Authorization flow** | `default-provider-authorization-implicit-consent` | Authorizes existing sessions with zero extra consent prompts |
+| **Client type** | `Confidential` | Server-backed client capable of keeping a client secret safe |
+| **Client ID** | `portal-client` | Public identifier matched in `apps/portal` config |
+| **Client Secret** | `portal-secret-123456` | Shared secret used by server backend to exchange code for tokens |
+| **Redirect URIs/Origins** | `https://portal.local.dev/auth/callback`<br/>`http://localhost:3000/auth/callback` | Strict whitelist of allowed callback endpoints (one per line) |
+| **Signing Key** | `authentik Self-signed Certificate` | RSA certificate used to digitally sign JWTs |
+
+7. Scroll down to **Advanced protocol settings** (click to expand):
+   - **Include claims in id_token**: Ensure this is **Checked** (allows claims to be read directly from the ID token without extra network calls).
+   - **Selected property mappings**: Ensure `OpenID 'openid'`, `'email'`, and `'profile'` are selected.
+8. Click **Finish**.
+
+---
+
+#### Part 2: Create the Application (`Developer Portal`)
+1. In the left sidebar, navigate to **Applications** → **Applications**.
+2. Click the blue **Create** button.
+3. Fill in the application settings:
+
+| Field | Value | Purpose |
+|---|---|---|
+| **Name** | `Developer Portal` | Human-readable title displayed in Authentik's "My applications" catalog |
+| **Slug** | `portal` | URL-friendly identifier used in OIDC discovery (`/application/o/portal/`) |
+| **Provider** | `portal-provider` | Binds this application to the OIDC provider created in Part 1 |
+| **Launch URL** | `https://portal.local.dev/` | Destination URL when clicking this application tile in Authentik |
+
+4. Click **Create**.
+
+> [!TIP]
+> **Automated Setup Alternative**: If you prefer CLI scripting, you can also run `docker exec -i authentik-server ak shell < scripts/seed-authentik.py` which idempotently seeds this provider and application.
+
+---
+
 ## 3.2 — Theory: Authorization Code Flow Step-by-Step
 
 Here is the exact lifecycle of every HTTP request, redirect, and token exchange:
